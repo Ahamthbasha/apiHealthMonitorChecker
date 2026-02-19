@@ -1,6 +1,7 @@
 // src/services/websocketService.ts
 import { io, Socket } from 'socket.io-client';
 import { API_BASE_URL } from '../config/config';
+import type { HealthCheckDTO } from '../types/interface/healthCheckInterface';
 
 export interface HealthCheckData {
   id: string;
@@ -96,7 +97,7 @@ export interface LiveStatsData {
 
 export interface EndpointUpdatedData {
   endpointId: string;
-  check: HealthCheckData;
+  check: HealthCheckDTO;
   timestamp: string;
 }
 

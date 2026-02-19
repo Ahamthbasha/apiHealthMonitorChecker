@@ -101,10 +101,6 @@ export class ApiEndpointService implements IApiEndpointService {
     return endpoint;
   }
 
-  async getUserEndpoints(userId: string): Promise<IApiEndpoint[]> {
-    return this.endpointRepository.findActiveByUser(userId);
-  }
-
   async getEndpointById(id: string, userId: string): Promise<IApiEndpoint> {
     const endpoint = await this.endpointRepository.findByIdAndUser(id, userId);
     

@@ -7,7 +7,7 @@ import type {
   UpdateEndpointDTO,
   ApiResponse,
 } from "../../types/interface/apiInterface";
-import type { EndpointStats, EndpointStatus, HealthCheck } from "../../types/interface/healthCheckInterface";
+import type { EndpointStats, EndpointStatus, HealthCheck, HealthCheckDTO } from "../../types/interface/healthCheckInterface";
 
 export const getUserEndpoints = async (): Promise<ApiEndpoint[]> => {
   const response = await API.get<ApiResponse<ApiEndpoint[]>>(
@@ -70,8 +70,8 @@ export const getUserEndpointsStatus = async (): Promise<EndpointStatus[]> => {
 export const getEndpointHistory = async (
   endpointId: string,
   limit: number = 100
-): Promise<HealthCheck[]> => {
-  const response = await API.get<ApiResponse<HealthCheck[]>>(
+): Promise<HealthCheckDTO[]> => {
+  const response = await API.get<ApiResponse<HealthCheckDTO[]>>(
     userRouterEndPoints.getEndpointHistory(endpointId, limit)
   );
   return response.data.data;

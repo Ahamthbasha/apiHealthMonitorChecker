@@ -1,15 +1,14 @@
+// components/Footer.tsx
 const Footer = () => {
   return (
-    <footer className="bg-white border-t border-gray-200 mt-auto">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="flex flex-col sm:flex-row justify-between items-center space-y-2 sm:space-y-0">
-          <p className="text-sm text-gray-600">
-            API Health Monitor crafted by{" "}
-            <span className="font-semibold bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">
-              Ahamathbasha
-            </span>
-          </p>
+    <footer className="bg-gray-900 border-t border-gray-700/50 mt-auto">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-2">
           <p className="text-sm text-gray-500">
+            API Health Monitor crafted by{" "}
+            <span className="font-semibold text-green-400">Ahamathbasha</span>
+          </p>
+          <p className="text-sm text-gray-600">
             © {new Date().getFullYear()} All rights reserved
           </p>
         </div>

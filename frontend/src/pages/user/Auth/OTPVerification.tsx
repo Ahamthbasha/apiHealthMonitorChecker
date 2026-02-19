@@ -26,17 +26,20 @@ interface LocationState {
 interface ErrorResponse {
   success: boolean;
   message?: string;
-  data?: {
-    expiresIn?: number;
-  };
+  data?: { expiresIn?: number };
 }
 
 interface ResendOTPResponse {
   success: boolean;
   message?: string;
-  data?: {
-    expiresIn?: number;
-  };
+  data?: { expiresIn?: number };
+}
+
+function maskEmail(email: string): string {
+  if (!email) return "";
+  const [localPart, domain] = email.split("@");
+  if (localPart.length <= 3) return `${localPart}***@${domain}`;
+  return `${localPart.substring(0, 3)}***${localPart.substring(localPart.length - 1)}@${domain}`;
 }
 
 export default function OTPVerification() {
@@ -49,20 +52,11 @@ export default function OTPVerification() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    setValue,
-    resetField,
-  } = useForm<OTPForm>({
+  const { register, handleSubmit, formState: { errors }, setValue, resetField } = useForm<OTPForm>({
     resolver: zodResolver(otpSchema),
-    defaultValues: {
-      otp: "",
-    },
+    defaultValues: { otp: "" },
   });
 
-  // Redirect if no email in state
   useEffect(() => {
     if (!state?.email) {
       toast.error("No verification session found. Please register again.");
@@ -70,42 +64,21 @@ export default function OTPVerification() {
     }
   }, [state, navigate]);
 
-  // Set initial timer from backend or default
   useEffect(() => {
-    if (state?.expiresIn) {
-      setTimer(state.expiresIn);
-    }
+    if (state?.expiresIn) setTimer(state.expiresIn);
   }, [state]);
 
-  // Countdown timer
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    
-    if (timer > 0) {
-      interval = setInterval(() => {
-        setTimer((prev) => prev - 1);
-      }, 1000);
-    } else {
-      setCanResend(true);
-    }
-
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
+    if (timer <= 0) { setCanResend(true); return; }
+    const interval = setInterval(() => setTimer((p) => p - 1), 1000);
+    return () => clearInterval(interval);
   }, [timer]);
 
   const onSubmit = async (data: OTPForm) => {
     if (!state?.email) return;
-    
     setIsVerifying(true);
     try {
-      const res = await verifyOTP({ 
-        email: state.email, 
-        otp: data.otp 
-      });
-
+      const res = await verifyOTP({ email: state.email, otp: data.otp });
       if (res.success) {
         toast.success(res.message || "Email verified successfully! You can now log in.");
         setTimeout(() => navigate("/login"), 2000);
@@ -120,29 +93,14 @@ export default function OTPVerification() {
 
   const handleResendOTP = async () => {
     if (!state?.email) return;
-    
     setIsResending(true);
     try {
       const res = await resendOTP({ email: state.email }) as ResendOTPResponse;
-      
       if (res.success) {
         toast.success(res.message || "New OTP sent successfully!");
-        
-        resetField("otp", { 
-          defaultValue: "",
-          keepError: false,
-          keepTouched: false,
-          keepDirty: false
-        });
-        
-        setValue("otp", "", { 
-          shouldValidate: false,
-          shouldDirty: false,
-          shouldTouch: false 
-        });
-        
-        const expiresIn = res.data?.expiresIn || 60;
-        setTimer(expiresIn);
+        resetField("otp", { defaultValue: "", keepError: false, keepTouched: false, keepDirty: false });
+        setValue("otp", "", { shouldValidate: false, shouldDirty: false, shouldTouch: false });
+        setTimer(res.data?.expiresIn || 60);
         setCanResend(false);
       }
     } catch (error: unknown) {
@@ -153,140 +111,150 @@ export default function OTPVerification() {
     }
   };
 
-  const handleGoBack = () => {
-    navigate("/register");
-  };
-
-  const maskEmail = (email: string) => {
-    if (!email) return "";
-    const [localPart, domain] = email.split("@");
-    if (localPart.length <= 3) {
-      return `${localPart}***@${domain}`;
-    }
-    return `${localPart.substring(0, 3)}***${localPart.substring(localPart.length - 1)}@${domain}`;
-  };
-
   const handleOtpChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, "").slice(0, 6);
     setValue("otp", value, { shouldValidate: true });
-    
-    if (value.length === 6) {
-      handleSubmit(onSubmit)();
-    }
+    if (value.length === 6) handleSubmit(onSubmit)();
   };
 
+  // Timer ring progress (0–100)
+  const progress = ((60 - timer) / 60) * 100;
+  const circumference = 2 * Math.PI * 20;
+  const strokeDashoffset = circumference - (progress / 100) * circumference;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-2xl shadow-xl">
-        {/* Header */}
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-100 to-cyan-100 rounded-full mb-4">
-            <span className="text-3xl">📧</span>
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full">
+
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
+              <div className="w-3.5 h-3.5 rounded-full bg-white animate-pulse" />
+            </div>
+            <span className="text-2xl font-bold text-white tracking-tight">API Health</span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            Verify Your Email
-          </h1>
-          <p className="text-sm text-gray-600 mb-2">
-            We've sent a verification code to:
-          </p>
-          <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-3 rounded-lg">
-            <p className="text-sm font-medium text-gray-900">
-              {state?.email ? maskEmail(state.email) : ""}
-            </p>
-          </div>
+          <p className="text-sm text-gray-500">Email verification</p>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-6">
-          <InputField
-            label="Enter Verification Code"
-            id="otp"
-            type="text"
-            placeholder="123456"
-            {...register("otp")}
-            onChange={handleOtpChange}
-            error={errors.otp?.message}
-            maxLength={6}
-            autoComplete="off"
-            autoFocus={true}
-            className="text-center text-2xl tracking-widest font-mono"
-          />
+        {/* Card */}
+        <div className="bg-gray-900 border border-gray-700/50 rounded-xl p-8">
 
-          {/* Timer */}
-          <div className="text-center">
-            {!canResend ? (
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg">
-                <span className="inline-block w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
-                <span className="text-sm text-gray-600">
-                  Code expires in <span className="font-bold text-blue-600">{timer}s</span>
-                </span>
-              </div>
-            ) : (
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-100 rounded-lg">
-                <span className="inline-block w-2 h-2 bg-yellow-500 rounded-full"></span>
-                <span className="text-sm text-yellow-700">Code expired. Request a new one.</span>
-              </div>
-            )}
+          {/* Header */}
+          <div className="text-center mb-6">
+            {/* Timer ring */}
+            <div className="inline-flex items-center justify-center mb-4 relative">
+              <svg width="56" height="56" className="-rotate-90">
+                <circle cx="28" cy="28" r="20" stroke="#1f2937" strokeWidth="3" fill="none" />
+                <circle
+                  cx="28" cy="28" r="20"
+                  stroke={timer > 15 ? "#22c55e" : "#ef4444"}
+                  strokeWidth="3"
+                  fill="none"
+                  strokeDasharray={circumference}
+                  strokeDashoffset={strokeDashoffset}
+                  strokeLinecap="round"
+                  style={{ transition: "stroke-dashoffset 1s linear, stroke 0.3s" }}
+                />
+              </svg>
+              <span className={`absolute text-sm font-bold font-mono ${timer > 15 ? "text-green-400" : "text-red-400"}`}>
+                {timer}s
+              </span>
+            </div>
+
+            <h2 className="text-lg font-semibold text-white">Verify Your Email</h2>
+            <p className="text-sm text-gray-500 mt-1 mb-3">We've sent a verification code to:</p>
+            <div className="inline-block bg-gray-800 border border-gray-700 rounded-lg px-4 py-2">
+              <span className="text-sm font-mono text-gray-300">
+                {state?.email ? maskEmail(state.email) : ""}
+              </span>
+            </div>
           </div>
 
-          {/* Verify Button */}
-          <button
-            type="submit"
-            disabled={isVerifying}
-            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-          >
-            {isVerifying ? (
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                Verifying...
-              </div>
-            ) : (
-              "Verify & Continue"
-            )}
-          </button>
+          {/* Form */}
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <InputField
+              label="Verification Code"
+              id="otp"
+              type="text"
+              placeholder="123456"
+              {...register("otp")}
+              onChange={handleOtpChange}
+              error={errors.otp?.message}
+              maxLength={6}
+              autoComplete="off"
+              autoFocus={true}
+              className="text-center text-2xl tracking-widest font-mono"
+            />
 
-          {/* Resend Section */}
-          <div className="text-center">
-            <p className="text-sm text-gray-600 mb-2">
-              Didn't receive the code?
-            </p>
+            {/* Status pill */}
+            <div className="flex justify-center">
+              {!canResend ? (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                  <span className="text-xs text-gray-400">
+                    Expires in <span className={`font-bold font-mono ${timer > 15 ? "text-green-400" : "text-red-400"}`}>{timer}s</span>
+                  </span>
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/30 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                  <span className="text-xs text-red-400">Code expired — request a new one</span>
+                </div>
+              )}
+            </div>
+
+            {/* Verify button */}
             <button
-              type="button"
-              onClick={handleResendOTP}
-              disabled={!canResend || isResending}
-              className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-cyan-600 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
+              type="submit"
+              disabled={isVerifying}
+              className="w-full flex justify-center items-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {isResending ? (
+              {isVerifying ? (
                 <>
-                  <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                  Sending...
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Verifying...
                 </>
               ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Resend OTP
-                </>
+                "Verify & Continue"
               )}
             </button>
-          </div>
 
-          {/* Back Button */}
-          <button
-            type="button"
-            onClick={handleGoBack}
-            className="w-full text-sm text-gray-500 hover:text-gray-700 transition-colors"
-          >
-            ← Back to Registration
-          </button>
-        </form>
+            {/* Resend */}
+            <div className="text-center">
+              <p className="text-xs text-gray-500 mb-2">Didn't receive the code?</p>
+              <button
+                type="button"
+                onClick={handleResendOTP}
+                disabled={!canResend || isResending}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-green-400 hover:text-green-300 disabled:text-gray-600 disabled:cursor-not-allowed transition-colors"
+              >
+                {isResending ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-green-400/30 border-t-green-400 rounded-full animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Resend OTP
+                  </>
+                )}
+              </button>
+            </div>
 
-        {/* Security Note */}
-        <div className="mt-4 pt-4 border-t border-gray-200">
-          <p className="text-xs text-center text-gray-500">
-            For security reasons, this code will expire in {timer} seconds
-          </p>
+            {/* Back */}
+            <button
+              type="button"
+              onClick={() => navigate("/register")}
+              className="w-full text-xs text-gray-600 hover:text-gray-400 transition-colors pt-1"
+            >
+              ← Back to Registration
+            </button>
+          </form>
         </div>
       </div>
     </div>

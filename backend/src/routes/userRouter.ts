@@ -17,7 +17,6 @@ router.use(authMiddleware.authenticate)
 
 router.route('/endpoints')
   .post(createEndpointValidation, userApiEndpointController.createEndpoint)
-  .get(userApiEndpointController.getUserEndpoints);
 
 router.route('/endpoints/:endpointId')
   .get(endpointIdValidation, userApiEndpointController.getEndpointById)

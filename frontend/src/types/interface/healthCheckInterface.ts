@@ -14,6 +14,17 @@ export interface HealthCheck {
   updatedAt: string;
 }
 
+export interface HealthCheckDTO {
+  id: string;
+  endpointId: string;
+  status: 'success' | 'failure' | 'timeout';
+  responseTime: number;
+  statusCode?: number;
+  errorMessage?: string;
+  checkedAt: string;
+}
+
+
 export interface EndpointStatus {
   endpointId: string;
   name: string;

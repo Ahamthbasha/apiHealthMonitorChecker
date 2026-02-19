@@ -54,23 +54,19 @@ export default function Register() {
 
       if (res.success) {
         toast.success(res.message || "OTP sent successfully! Check your email.");
-        navigate("/verifyOtp", { 
-          state: { 
+        navigate("/verifyOtp", {
+          state: {
             email: res.data?.email || email,
-            expiresIn: res.data?.expiresIn || 60 
-          } 
+            expiresIn: res.data?.expiresIn || 60,
+          },
         });
       }
     } catch (error: unknown) {
       const err = error as AxiosError<ErrorResponse>;
-      
       if (err.response?.data) {
         const responseData = err.response.data;
-        
         if (responseData.errors && Array.isArray(responseData.errors)) {
-          responseData.errors.forEach((validationErr) => {
-            toast.error(validationErr.msg);
-          });
+          responseData.errors.forEach((v) => toast.error(v.msg));
         } else if (responseData.message) {
           toast.error(responseData.message);
         } else {
@@ -85,53 +81,49 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-2xl shadow-xl">
-        {/* Header */}
-        <div className="text-center">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent mb-2">
-            API Health
-          </h1>
-          <p className="text-sm text-gray-600 flex items-center justify-center gap-2">
-            <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-            Start monitoring your APIs
-          </p>
-          <h2 className="mt-6 text-2xl font-semibold text-gray-900">
-            Create Account
-          </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Join to monitor your endpoints 24/7
-          </p>
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full">
+
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
+              <div className="w-3.5 h-3.5 rounded-full bg-white animate-pulse" />
+            </div>
+            <span className="text-2xl font-bold text-white tracking-tight">API Health</span>
+          </div>
+          <p className="text-sm text-gray-500">Start monitoring your APIs</p>
         </div>
 
-        {/* Password Requirements */}
-        <div className="bg-blue-50 p-4 rounded-lg">
-          <h3 className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-2">
-            Password Requirements
-          </h3>
-          <ul className="text-xs text-blue-700 space-y-1">
-            <li className="flex items-center gap-2">
-              <span className="inline-block w-1 h-1 bg-blue-500 rounded-full"></span>
-              At least 6 characters long
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="inline-block w-1 h-1 bg-blue-500 rounded-full"></span>
-              One uppercase letter
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="inline-block w-1 h-1 bg-blue-500 rounded-full"></span>
-              One lowercase letter
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="inline-block w-1 h-1 bg-blue-500 rounded-full"></span>
-              One number
-            </li>
-          </ul>
-        </div>
+        {/* Card */}
+        <div className="bg-gray-900 border border-gray-700/50 rounded-xl p-8">
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold text-white">Create Account</h2>
+            <p className="text-sm text-gray-500 mt-1">Monitor your endpoints 24/7</p>
+          </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-6">
-          <div className="space-y-4">
+          {/* Password Requirements */}
+          <div className="bg-gray-800/60 border border-gray-700/50 rounded-lg p-3.5 mb-6">
+            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+              Password Requirements
+            </h3>
+            <ul className="space-y-1">
+              {[
+                "At least 6 characters long",
+                "One uppercase letter",
+                "One lowercase letter",
+                "One number",
+              ].map((req) => (
+                <li key={req} className="flex items-center gap-2 text-xs text-gray-500">
+                  <span className="w-1 h-1 rounded-full bg-green-500 flex-shrink-0" />
+                  {req}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <InputField
               label="Full Name"
               id="name"
@@ -140,7 +132,6 @@ export default function Register() {
               {...register("name")}
               error={errors.name?.message}
             />
-
             <InputField
               label="Email Address"
               id="email"
@@ -149,7 +140,6 @@ export default function Register() {
               {...register("email")}
               error={errors.email?.message}
             />
-
             <PasswordField
               label="Password"
               id="password"
@@ -157,7 +147,6 @@ export default function Register() {
               {...register("password")}
               error={errors.password?.message}
             />
-
             <PasswordField
               label="Confirm Password"
               id="confirmPassword"
@@ -165,36 +154,30 @@ export default function Register() {
               {...register("confirmPassword")}
               error={errors.confirmPassword?.message}
             />
-          </div>
 
-          <div>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              className="w-full flex justify-center items-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors mt-2"
             >
               {isSubmitting ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   Creating account...
-                </div>
+                </>
               ) : (
                 "Create Account"
               )}
             </button>
-          </div>
-        </form>
+          </form>
 
-        {/* Footer */}
-        <p className="text-center text-sm text-gray-600">
-          Already have an account?{" "}
-          <Link 
-            to="/login" 
-            className="font-medium text-blue-600 hover:text-cyan-600 transition-colors"
-          >
-            Sign in
-          </Link>
-        </p>
+          <p className="text-center text-sm text-gray-500 mt-6">
+            Already have an account?{" "}
+            <Link to="/login" className="text-green-400 hover:text-green-300 font-medium transition-colors">
+              Sign in
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

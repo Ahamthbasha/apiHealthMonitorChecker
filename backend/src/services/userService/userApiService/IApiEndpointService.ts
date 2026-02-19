@@ -34,7 +34,6 @@ export interface UpdateEndpointDTO {
 
 export interface IApiEndpointService {
   createEndpoint(userId: string, data: CreateEndpointDTO): Promise<IApiEndpoint>;
-  getUserEndpoints(userId: string): Promise<IApiEndpoint[]>;
   getEndpointById(id: string, userId: string): Promise<IApiEndpoint>;
   updateEndpoint(id: string, userId: string, data: UpdateEndpointDTO): Promise<IApiEndpoint>;
   deleteEndpoint(id: string, userId: string): Promise<void>;

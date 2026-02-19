@@ -43,24 +43,6 @@ export class ApiEndpointController implements IApiEndpointController {
     }
   };
 
-  getUserEndpoints = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      if (!req.user) {
-        throw new AppError('User not authenticated', 401);
-      }
-
-      const endpoints = await this.endpointService.getUserEndpoints(req.user.userId);
-
-      res.status(200).json({
-        success: true,
-        message: 'Endpoints retrieved successfully',
-        data: endpoints
-      });
-    } catch (error) {
-      next(error);
-    }
-  };
-
   getEndpointById = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       if (!req.user) {

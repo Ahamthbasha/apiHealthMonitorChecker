@@ -1,72 +1,9 @@
 // src/pages/user/endpoint/EndpointForm.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import {
-  Save,
-  X,
-  Plus,
-  Trash2,
-  Globe,
-  Clock,
-  Zap,
-  Shield,
-} from 'lucide-react';
+import { Save, X, Plus, Trash2, Globe, Clock, Zap, Shield } from 'lucide-react';
 import { createEndpoint, getEndpointById, updateEndpoint } from '../../../api/userAction/userAction';
 import type { CreateEndpointDTO, UpdateEndpointDTO } from '../../../types/interface/apiInterface';
-
-// Simple Loading Spinner Component
-const LoadingSpinner: React.FC<{ size?: 'sm' | 'md' | 'lg' }> = ({ size = 'md' }) => {
-  const sizeClasses = {
-    sm: 'w-4 h-4',
-    md: 'w-8 h-8',
-    lg: 'w-12 h-12',
-  };
-
-  return (
-    <div className="flex justify-center items-center">
-      <div className={`${sizeClasses[size]} animate-spin rounded-full border-4 border-gray-200 border-t-blue-600`}></div>
-    </div>
-  );
-};
-
-// Alert Component
-const Alert: React.FC<{ 
-  type: 'error' | 'success' | 'info' | 'warning'; 
-  message: string; 
-  errors?: Array<{ msg: string; path: string }>;
-  onClose?: () => void;
-}> = ({ type, message, errors, onClose }) => {
-  const bgColors = {
-    error: 'bg-red-50 border-red-200 text-red-700',
-    success: 'bg-green-50 border-green-200 text-green-700',
-    info: 'bg-blue-50 border-blue-200 text-blue-700',
-    warning: 'bg-yellow-50 border-yellow-200 text-yellow-700',
-  };
-
-  return (
-    <div className={`mb-4 p-4 rounded-lg border ${bgColors[type]}`}>
-      <div className="flex justify-between items-start">
-        <div className="flex-1">
-          <p className="font-medium">{message}</p>
-          {errors && errors.length > 0 && (
-            <ul className="mt-2 list-disc list-inside text-sm">
-              {errors.map((error, index) => (
-                <li key={index} className="text-red-600">
-                  {error.msg} ({error.path})
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        {onClose && (
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 ml-4">
-            <X className="w-4 h-4" />
-          </button>
-        )}
-      </div>
-    </div>
-  );
-};
 
 interface HeaderField {
   key: string;
@@ -78,9 +15,104 @@ interface ValidationError {
   path: string;
 }
 
+interface ApiError {
+  response?: {
+    data?: {
+      errors?: ValidationError[];
+      message?: string;
+    };
+  };
+  message?: string;
+}
+
+function isApiError(err: unknown): err is ApiError {
+  return typeof err === 'object' && err !== null && 'response' in err;
+}
+
+// ---------------------------------------------------------------------------
+// LoadingSpinner
+// ---------------------------------------------------------------------------
+const LoadingSpinner: React.FC<{ size?: 'sm' | 'md' | 'lg' }> = ({ size = 'md' }) => {
+  const sizeClasses = { sm: 'w-4 h-4', md: 'w-8 h-8', lg: 'w-12 h-12' };
+  return (
+    <div className="flex justify-center items-center">
+      <div className={`${sizeClasses[size]} animate-spin rounded-full border-2 border-gray-700 border-t-green-500`} />
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Alert
+// ---------------------------------------------------------------------------
+const Alert: React.FC<{
+  type: 'error' | 'success' | 'info' | 'warning';
+  message: string;
+  errors?: ValidationError[];
+  onClose?: () => void;
+}> = ({ type, message, errors, onClose }) => {
+  const styles = {
+    error: 'bg-red-500/10 border-red-500/30 text-red-400',
+    success: 'bg-green-500/10 border-green-500/30 text-green-400',
+    info: 'bg-blue-500/10 border-blue-500/30 text-blue-400',
+    warning: 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400',
+  };
+
+  return (
+    <div className={`mb-4 p-4 rounded-lg border ${styles[type]}`}>
+      <div className="flex justify-between items-start">
+        <div className="flex-1">
+          <p className="font-medium text-sm">{message}</p>
+          {errors && errors.length > 0 && (
+            <ul className="mt-2 list-disc list-inside text-xs space-y-1 opacity-80">
+              {errors.map((error, index) => (
+                <li key={index}>{error.msg} ({error.path})</li>
+              ))}
+            </ul>
+          )}
+        </div>
+        {onClose && (
+          <button onClick={onClose} className="text-current opacity-50 hover:opacity-100 ml-4 transition-opacity">
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Section wrapper
+// ---------------------------------------------------------------------------
+const Section: React.FC<{
+  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+}> = ({ icon, title, children }) => (
+  <div className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-6">
+    <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-widest mb-5 flex items-center gap-2">
+      <span className="text-green-400">{icon}</span>
+      {title}
+    </h2>
+    {children}
+  </div>
+);
+
+// ---------------------------------------------------------------------------
+// Shared input classes
+// ---------------------------------------------------------------------------
+const inputCls =
+  'w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-200 text-sm placeholder-gray-600 focus:outline-none focus:border-green-500 transition-colors';
+
+const labelCls = 'block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider';
+const hintCls = 'mt-1 text-xs text-gray-600';
+
+// ---------------------------------------------------------------------------
+// EndpointForm
+// ---------------------------------------------------------------------------
 const EndpointForm: React.FC = () => {
   const { endpointId } = useParams<{ endpointId: string }>();
   const navigate = useNavigate();
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,12 +125,12 @@ const EndpointForm: React.FC = () => {
     method: 'GET',
     headers: {},
     body: '',
-    expectedStatus: 200,
-    interval: 300,
-    timeout: 10000,
+    expectedStatus: undefined,
+    interval: undefined,
+    timeout: undefined,
     thresholds: {
-      maxResponseTime: 5000,
-      failureThreshold: 3,
+      maxResponseTime: undefined,
+      failureThreshold: undefined,
     },
   });
 
@@ -106,21 +138,13 @@ const EndpointForm: React.FC = () => {
 
   const fetchEndpoint = useCallback(async () => {
     if (!endpointId) return;
-    
     try {
       setLoading(true);
       const data = await getEndpointById(endpointId);
-      
-      // Convert headers from Map to array
-      const headersArray: HeaderField[] = [];
-      if (data.headers) {
-        Object.entries(data.headers).forEach(([key, value]) => {
-          headersArray.push({ key, value: String(value) });
-        });
-      }
-      
+      const headersArray: HeaderField[] = data.headers
+        ? Object.entries(data.headers).map(([key, value]) => ({ key, value: String(value) }))
+        : [];
       setHeaders(headersArray.length ? headersArray : [{ key: '', value: '' }]);
-      
       setFormData({
         name: data.name,
         url: data.url,
@@ -132,18 +156,15 @@ const EndpointForm: React.FC = () => {
         timeout: data.timeout,
         thresholds: data.thresholds,
       });
-    } catch (error) {
+    } catch {
       setError('Failed to load endpoint');
-      console.error('Fetch endpoint error:', error);
     } finally {
       setLoading(false);
     }
   }, [endpointId]);
 
   useEffect(() => {
-    if (endpointId) {
-      fetchEndpoint();
-    }
+    if (endpointId) fetchEndpoint();
   }, [endpointId, fetchEndpoint]);
 
   const handleInputChange = (
@@ -151,162 +172,156 @@ const EndpointForm: React.FC = () => {
   ) => {
     const { name, value, type } = e.target;
     
+    // For number inputs, convert to number, but allow empty string
+    let processedValue: string | number | undefined = value;
+    
+    if (type === 'number') {
+      processedValue = value === '' ? undefined : Number(value);
+    } else if (type === 'select-one' && name === 'interval') {
+      // For interval select, convert to number
+      processedValue = value === '' ? undefined : Number(value);
+    } else {
+      processedValue = value;
+    }
+
     if (name.includes('.')) {
       const [parent, child] = name.split('.');
-      setFormData((prev) => {
-        const parentValue = prev[parent as keyof typeof prev];
-        const numericValue = type === 'number' ? (value === '' ? undefined : parseInt(value)) : value;
-        
-        return {
-          ...prev,
-          [parent]: {
-            ...(typeof parentValue === 'object' && parentValue !== null ? parentValue : {}),
-            [child]: numericValue,
-          },
-        };
-      });
-    } else {
-      const numericValue = type === 'number' ? (value === '' ? undefined : parseInt(value)) : value;
       setFormData((prev) => ({
         ...prev,
-        [name]: numericValue,
+        [parent]: {
+          ...(typeof prev[parent as keyof typeof prev] === 'object' &&
+          prev[parent as keyof typeof prev] !== null
+            ? (prev[parent as keyof typeof prev] as object)
+            : {}),
+          [child]: processedValue,
+        },
       }));
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: processedValue }));
     }
   };
 
+  const syncHeaders = (updated: HeaderField[]) => {
+    const obj: Record<string, string> = {};
+    updated.forEach((h) => { if (h.key && h.value) obj[h.key] = h.value; });
+    setFormData((prev) => ({ ...prev, headers: obj }));
+  };
+
   const handleHeaderChange = (index: number, field: keyof HeaderField, value: string) => {
-    const newHeaders = [...headers];
-    newHeaders[index][field] = value;
-    setHeaders(newHeaders);
-
-    // Update formData.headers
-    const headersObject: Record<string, string> = {};
-    newHeaders.forEach((h) => {
-      if (h.key && h.value) {
-        headersObject[h.key] = h.value;
-      }
-    });
-    setFormData((prev) => ({ ...prev, headers: headersObject }));
+    const updated = [...headers];
+    updated[index][field] = value;
+    setHeaders(updated);
+    syncHeaders(updated);
   };
 
-  const addHeader = () => {
-    setHeaders([...headers, { key: '', value: '' }]);
-  };
+  const addHeader = () => setHeaders((prev) => [...prev, { key: '', value: '' }]);
 
   const removeHeader = (index: number) => {
-    const newHeaders = headers.filter((_, i) => i !== index);
-    setHeaders(newHeaders);
-
-    // Update formData.headers
-    const headersObject: Record<string, string> = {};
-    newHeaders.forEach((h) => {
-      if (h.key && h.value) {
-        headersObject[h.key] = h.value;
-      }
-    });
-    setFormData((prev) => ({ ...prev, headers: headersObject }));
+    const updated = headers.filter((_, i) => i !== index);
+    setHeaders(updated);
+    syncHeaders(updated);
   };
 
   const validateForm = (): boolean => {
     const errors: string[] = [];
     
     if (!formData.name || formData.name.length < 3) {
-      errors.push('Name must be at least 3 characters long');
+      errors.push('Name must be at least 3 characters');
     }
+    
     if (!formData.url) {
       errors.push('URL is required');
     } else {
-      try {
-        new URL(formData.url);
-      } catch {
-        errors.push('Please enter a valid URL including http:// or https://');
+      try { 
+        new URL(formData.url); 
+      } catch { 
+        errors.push('Enter a valid URL with http:// or https://'); 
       }
     }
-
-    // Validate numeric fields
-    if (formData.expectedStatus !== undefined) {
-      if (formData.expectedStatus < 100 || formData.expectedStatus > 599) {
-        errors.push('Expected status must be between 100 and 599');
-      }
+    
+    if (formData.expectedStatus === undefined || formData.expectedStatus === null) {
+      errors.push('Expected status code is required');
+    } else if (formData.expectedStatus < 100 || formData.expectedStatus > 599) {
+      errors.push('Expected status must be between 100 and 599');
     }
-
-    if (formData.timeout !== undefined) {
-      if (formData.timeout < 1000 || formData.timeout > 30000) {
-        errors.push('Timeout must be between 1000ms and 30000ms');
-      }
+    
+    if (formData.interval === undefined || formData.interval === null) {
+      errors.push('Check interval is required');
     }
-
-    if (formData.thresholds?.maxResponseTime !== undefined) {
-      if (formData.thresholds.maxResponseTime < 100 || formData.thresholds.maxResponseTime > 30000) {
-        errors.push('Max response time must be between 100ms and 30000ms');
-      }
+    
+    if (formData.timeout === undefined || formData.timeout === null) {
+      errors.push('Timeout is required');
+    } else if (formData.timeout < 1000 || formData.timeout > 30000) {
+      errors.push('Timeout must be between 1000ms and 30000ms');
     }
-
-    if (formData.thresholds?.failureThreshold !== undefined) {
-      if (formData.thresholds.failureThreshold < 1 || formData.thresholds.failureThreshold > 10) {
-        errors.push('Failure threshold must be between 1 and 10');
-      }
+    
+    if (formData.thresholds?.maxResponseTime === undefined || formData.thresholds?.maxResponseTime === null) {
+      errors.push('Max response time is required');
+    } else if (formData.thresholds.maxResponseTime < 100 || formData.thresholds.maxResponseTime > 30000) {
+      errors.push('Max response time must be between 100ms and 30000ms');
     }
-
-    if (errors.length > 0) {
-      setError(errors.join('. '));
-      return false;
+    
+    if (formData.thresholds?.failureThreshold === undefined || formData.thresholds?.failureThreshold === null) {
+      errors.push('Failure threshold is required');
+    } else if (formData.thresholds.failureThreshold < 1 || formData.thresholds.failureThreshold > 10) {
+      errors.push('Failure threshold must be between 1 and 10');
     }
-
+    
+    if (errors.length > 0) { 
+      setError(errors.join('. ')); 
+      return false; 
+    }
+    
     return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Clear previous errors
     setError(null);
     setValidationErrors([]);
     
     if (!validateForm()) return;
-
+    
     setSaving(true);
 
     try {
-      // Prepare data with proper numeric values
+      // Ensure all numeric values are numbers
       const submitData: CreateEndpointDTO = {
         name: formData.name,
         url: formData.url,
         method: formData.method,
         headers: formData.headers,
         body: formData.body || undefined,
-        expectedStatus: formData.expectedStatus || 200,
-        interval: formData.interval || 300,
-        timeout: formData.timeout || 10000,
+        expectedStatus: Number(formData.expectedStatus),
+        interval: Number(formData.interval) as 60 | 300 | 900,
+        timeout: Number(formData.timeout),
         thresholds: {
-          maxResponseTime: formData.thresholds?.maxResponseTime || 5000,
-          failureThreshold: formData.thresholds?.failureThreshold || 3,
+          maxResponseTime: Number(formData.thresholds?.maxResponseTime),
+          failureThreshold: Number(formData.thresholds?.failureThreshold),
         },
       };
 
       if (endpointId) {
-        const updateData: UpdateEndpointDTO = submitData;
-        await updateEndpoint(endpointId, updateData);
+        await updateEndpoint(endpointId, submitData as UpdateEndpointDTO);
         setSuccess('Endpoint updated successfully!');
       } else {
         await createEndpoint(submitData);
         setSuccess('Endpoint created successfully!');
       }
 
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 2000);
-    } catch (err: any) {
-      console.error('Submit error:', err);
-      
-      // Handle validation errors from backend
-      if (err.response?.data?.errors) {
-        setValidationErrors(err.response.data.errors);
-        setError(err.response.data.message || 'Validation failed');
-      } else if (err.response?.data?.message) {
-        setError(err.response.data.message);
+      setTimeout(() => navigate('/dashboard'), 2000);
+    } catch (err: unknown) {
+      if (isApiError(err)) {
+        if (err.response?.data?.errors) {
+          setValidationErrors(err.response.data.errors);
+          setError(err.response.data.message || 'Validation failed');
+        } else if (err.response?.data?.message) {
+          setError(err.response.data.message);
+        } else {
+          setError('Failed to save endpoint. Please check your input.');
+        }
       } else {
-        setError('Failed to save endpoint. Please check your input.');
+        setError('An unexpected error occurred.');
       }
     } finally {
       setSaving(false);
@@ -315,21 +330,22 @@ const EndpointForm: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <LoadingSpinner size="lg" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">
-            {endpointId ? 'Edit Endpoint' : 'Create New Endpoint'}
+    <div className="min-h-screen bg-gray-950">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        {/* Page Header */}
+        <div className="mb-7">
+          <h1 className="text-xl font-bold text-white tracking-tight">
+            {endpointId ? 'Edit Monitor' : 'Add New Monitor'}
           </h1>
-          <p className="text-gray-600 mt-1">
+          <p className="text-sm text-gray-500 mt-1">
             {endpointId
               ? 'Update your API endpoint configuration'
               : 'Configure a new API endpoint to monitor'}
@@ -337,56 +353,43 @@ const EndpointForm: React.FC = () => {
         </div>
 
         {error && (
-          <Alert 
-            type="error" 
-            message={error} 
+          <Alert
+            type="error"
+            message={error}
             errors={validationErrors}
-            onClose={() => {
-              setError(null);
-              setValidationErrors([]);
-            }} 
+            onClose={() => { setError(null); setValidationErrors([]); }}
           />
         )}
-        
         {success && (
-          <Alert 
-            type="success" 
-            message={success} 
-            onClose={() => setSuccess(null)} 
-          />
+          <Alert type="success" message={success} onClose={() => setSuccess(null)} />
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Basic Information */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <Globe className="w-5 h-5 mr-2 text-blue-600" />
-              Basic Information
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <form onSubmit={handleSubmit} className="space-y-4">
+
+          {/* Basic Info */}
+          <Section icon={<Globe className="w-4 h-4" />} title="Basic Information">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Endpoint Name *
-                </label>
+                <label className={labelCls}>Monitor Name *</label>
                 <input
                   type="text"
                   name="name"
                   value={formData.name}
                   onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={inputCls}
                   placeholder="e.g., Production API"
                   required
                 />
-                <p className="mt-1 text-xs text-gray-500">3-100 characters</p>
+                <p className={hintCls}>3–100 characters</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">HTTP Method *</label>
+                <label className={labelCls}>HTTP Method *</label>
                 <select
                   name="method"
                   value={formData.method}
                   onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={inputCls}
                   required
                 >
                   <option value="GET">GET</option>
@@ -397,204 +400,192 @@ const EndpointForm: React.FC = () => {
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">URL *</label>
+                <label className={labelCls}>URL *</label>
                 <input
                   type="url"
                   name="url"
                   value={formData.url}
                   onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={inputCls}
                   placeholder="https://api.example.com/health"
                   required
                 />
               </div>
             </div>
-          </div>
+          </Section>
 
           {/* Headers */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <Shield className="w-5 h-5 mr-2 text-blue-600" />
-              Headers
-            </h2>
-            <div className="space-y-3">
+          <Section icon={<Shield className="w-4 h-4" />} title="Request Headers (Optional)">
+            <div className="space-y-2">
               {headers.map((header, index) => (
-                <div key={index} className="flex gap-3">
+                <div key={index} className="flex gap-2">
                   <input
                     type="text"
                     placeholder="Header name"
                     value={header.key}
                     onChange={(e) => handleHeaderChange(index, 'key', e.target.value)}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={inputCls}
                   />
                   <input
                     type="text"
                     placeholder="Value"
                     value={header.value}
                     onChange={(e) => handleHeaderChange(index, 'value', e.target.value)}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={inputCls}
                   />
                   <button
                     type="button"
                     onClick={() => removeHeader(index)}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors flex-shrink-0"
                   >
-                    <Trash2 className="w-5 h-5" />
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               ))}
               <button
                 type="button"
                 onClick={addHeader}
-                className="inline-flex items-center px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-400 hover:bg-green-500/10 rounded-lg transition-colors border border-green-500/20"
               >
-                <Plus className="w-4 h-4 mr-2" />
+                <Plus className="w-3.5 h-3.5" />
                 Add Header
               </button>
             </div>
-          </div>
+          </Section>
 
           {/* Request Body */}
           {(formData.method === 'POST' || formData.method === 'PUT') && (
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Request Body</h2>
+            <Section icon={<Shield className="w-4 h-4" />} title="Request Body (Optional)">
               <textarea
                 name="body"
                 value={formData.body}
                 onChange={handleInputChange}
                 rows={5}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+                className={`${inputCls} font-mono resize-none`}
                 placeholder='{"key": "value"}'
               />
-            </div>
+            </Section>
           )}
 
-          {/* Monitoring Configuration */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <Clock className="w-5 h-5 mr-2 text-blue-600" />
-              Monitoring Configuration
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Monitoring Config */}
+          <Section icon={<Clock className="w-4 h-4" />} title="Monitoring Configuration">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Expected Status Code
-                </label>
+                <label className={labelCls}>Expected Status Code *</label>
                 <input
                   type="number"
                   name="expectedStatus"
-                  value={formData.expectedStatus}
+                  value={formData.expectedStatus === undefined ? '' : formData.expectedStatus}
                   onChange={handleInputChange}
                   min="100"
                   max="599"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={inputCls}
+                  required
+                  placeholder="200"
                 />
-                <p className="mt-1 text-xs text-gray-500">Default: 200</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Check Interval</label>
+                <label className={labelCls}>Check Interval *</label>
                 <select
                   name="interval"
-                  value={formData.interval}
+                  value={formData.interval === undefined ? '' : formData.interval}
                   onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={inputCls}
+                  required
                 >
-                  <option value="60">Every minute</option>
+                  <option value="" disabled>Select interval</option>
+                  <option value="60">Every 1 minute</option>
                   <option value="300">Every 5 minutes</option>
                   <option value="900">Every 15 minutes</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Timeout (ms)</label>
+                <label className={labelCls}>Timeout (ms) *</label>
                 <input
                   type="number"
                   name="timeout"
-                  value={formData.timeout}
+                  value={formData.timeout === undefined ? '' : formData.timeout}
                   onChange={handleInputChange}
                   min="1000"
                   max="30000"
                   step="1000"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={inputCls}
+                  required
+                  placeholder="10000"
                 />
-                <p className="mt-1 text-xs text-gray-500">Default: 10000ms (10s)</p>
               </div>
             </div>
-          </div>
+          </Section>
 
           {/* Thresholds */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <Zap className="w-5 h-5 mr-2 text-blue-600" />
-              Alert Thresholds
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Section icon={<Zap className="w-4 h-4" />} title="Alert Thresholds">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Max Response Time (ms)
-                </label>
+                <label className={labelCls}>Max Response Time (ms) *</label>
                 <input
                   type="number"
                   name="thresholds.maxResponseTime"
-                  value={formData.thresholds?.maxResponseTime}
+                  value={formData.thresholds?.maxResponseTime === undefined ? '' : formData.thresholds?.maxResponseTime}
                   onChange={handleInputChange}
                   min="100"
                   max="30000"
                   step="100"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={inputCls}
+                  required
+                  placeholder="5000"
                 />
-                <p className="mt-1 text-xs text-gray-500">Alert if response time exceeds this value (Default: 5000ms)</p>
+                <p className={hintCls}>Alert if response exceeds this value</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Failure Threshold
-                </label>
+                <label className={labelCls}>Failure Threshold *</label>
                 <input
                   type="number"
                   name="thresholds.failureThreshold"
-                  value={formData.thresholds?.failureThreshold}
+                  value={formData.thresholds?.failureThreshold === undefined ? '' : formData.thresholds?.failureThreshold}
                   onChange={handleInputChange}
                   min="1"
                   max="10"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={inputCls}
+                  required
+                  placeholder="3"
                 />
-                <p className="mt-1 text-xs text-gray-500">
-                  Number of consecutive failures before alert (Default: 3)
-                </p>
+                <p className={hintCls}>Consecutive failures before alert</p>
               </div>
             </div>
-          </div>
+          </Section>
 
-          {/* Form Actions */}
-          <div className="flex justify-end space-x-4">
+          {/* Actions */}
+          <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
               onClick={() => navigate('/dashboard')}
-              className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors flex items-center"
+              className="px-5 py-2 text-sm font-medium text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg transition-colors flex items-center gap-2"
             >
-              <X className="w-4 h-4 mr-2" />
+              <X className="w-4 h-4" />
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-5 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-500 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saving ? (
                 <>
                   <LoadingSpinner size="sm" />
-                  <span className="ml-2">Saving...</span>
+                  <span>Saving...</span>
                 </>
               ) : (
                 <>
-                  <Save className="w-4 h-4 mr-2" />
-                  {endpointId ? 'Update Endpoint' : 'Create Endpoint'}
+                  <Save className="w-4 h-4" />
+                  {endpointId ? 'Update Monitor' : 'Create Monitor'}
                 </>
               )}
             </button>
           </div>
+
         </form>
       </div>
     </div>

@@ -1,5 +1,6 @@
 // src/repository/healthCheckRepo/healthCheckRepo.ts
 import { HealthCheck, IHealthCheck } from "../../../models/healthCheckModel";
+import { LeanHealthCheckDocument } from "../../../types/leanTypes";
 import { GenericRepository } from "../../genericRepo/genericRepo";
 import { IHealthCheckRepository } from "./IHealthCheckRepo";
 
@@ -8,7 +9,7 @@ export class HealthCheckRepository extends GenericRepository<IHealthCheck> imple
     super(HealthCheck);
   }
 
-  async findByEndpoint(endpointId: string, limit: number = 100): Promise<IHealthCheck[]> {
+  async findByEndpoint(endpointId: string, limit: number = 100): Promise<LeanHealthCheckDocument[]> {
     return this.model
       .find({ endpointId })
       .sort({ checkedAt: -1 })

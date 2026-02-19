@@ -46,31 +46,18 @@ export default function Login() {
 
       if (res.success) {
         const { user } = res.data;
-        
-        dispatch(
-          setUser({
-            _id: user.id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-          })
-        );
-        
+        dispatch(setUser({ _id: user.id, name: user.name, email: user.email, role: user.role }));
         toast.success("Login successful! Monitoring your APIs...");
         navigate("/");
       }
     } catch (error: unknown) {
       const err = error as AxiosError<ErrorResponse>;
-
       if (err.response?.data) {
         const responseData = err.response.data;
-
         if (responseData.errors && Array.isArray(responseData.errors)) {
-          responseData.errors.forEach((validationErr, index) => {
-            toast.error(validationErr.msg, {
-              toastId: `error-${validationErr.path}-${index}`,
-            });
-          });
+          responseData.errors.forEach((v, i) =>
+            toast.error(v.msg, { toastId: `error-${v.path}-${i}` })
+          );
         } else if (responseData.message) {
           toast.error(responseData.message);
         } else {
@@ -83,28 +70,28 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-2xl shadow-xl">
-        {/* Header */}
-        <div className="text-center">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent mb-2">
-            API Health
-          </h1>
-          <p className="text-sm text-gray-600 flex items-center justify-center gap-2">
-            <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-            Monitor your endpoints in real-time
-          </p>
-          <h2 className="mt-6 text-2xl font-semibold text-gray-900">
-            Welcome Back
-          </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Sign in to monitor your APIs
-          </p>
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full">
+
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
+              <div className="w-3.5 h-3.5 rounded-full bg-white animate-pulse" />
+            </div>
+            <span className="text-2xl font-bold text-white tracking-tight">API Health</span>
+          </div>
+          <p className="text-sm text-gray-500">Monitor your endpoints in real-time</p>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-6">
-          <div className="space-y-4">
+        {/* Card */}
+        <div className="bg-gray-900 border border-gray-700/50 rounded-xl p-8">
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold text-white">Welcome Back</h2>
+            <p className="text-sm text-gray-500 mt-1">Sign in to monitor your APIs</p>
+          </div>
+
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <InputField
               label="Email Address"
               id="email"
@@ -113,7 +100,6 @@ export default function Login() {
               {...register("email")}
               error={errors.email?.message}
             />
-
             <PasswordField
               label="Password"
               id="password"
@@ -121,48 +107,42 @@ export default function Login() {
               {...register("password")}
               error={errors.password?.message}
             />
-          </div>
 
-          <div>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              className="w-full flex justify-center items-center gap-2 py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors mt-2"
             >
               {isSubmitting ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   Signing in...
-                </div>
+                </>
               ) : (
                 "Sign In"
               )}
             </button>
-          </div>
-        </form>
+          </form>
 
-        {/* Footer */}
-        <p className="text-center text-sm text-gray-600">
-          Don't have an account?{" "}
-          <Link 
-            to="/register" 
-            className="font-medium text-blue-600 hover:text-cyan-600 transition-colors"
-          >
-            Sign up
-          </Link>
-        </p>
+          <p className="text-center text-sm text-gray-500 mt-6">
+            Don't have an account?{" "}
+            <Link to="/register" className="text-green-400 hover:text-green-300 font-medium transition-colors">
+              Sign up
+            </Link>
+          </p>
 
-        {/* API Status Indicator */}
-        <div className="mt-4 pt-4 border-t border-gray-200">
-          <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
-            <div className="flex items-center gap-1">
-              <span className="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
-              API Status: Active
-            </div>
-            <span>•</span>
-            <div className="flex items-center gap-1">
-              <span className="inline-block w-2 h-2 bg-blue-500 rounded-full"></span>
-              Secure Connection
+          {/* Status bar */}
+          <div className="mt-6 pt-5 border-t border-gray-700/50">
+            <div className="flex items-center justify-center gap-4 text-xs text-gray-600">
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                API Status: Active
+              </div>
+              <span>•</span>
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                Secure Connection
+              </div>
             </div>
           </div>
         </div>

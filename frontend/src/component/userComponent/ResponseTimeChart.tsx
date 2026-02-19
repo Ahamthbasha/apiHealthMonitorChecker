@@ -10,12 +10,12 @@ import {
   Tooltip,
   Legend,
   Filler,
-  TimeScale,
+  TimeScale
 } from 'chart.js';
+import type { ChartOptions, TooltipItem } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
-import type { ChartOptions, TooltipItem } from 'chart.js';
-import { type HealthCheck } from '../../types/interface/healthCheckInterface';
+import { type HealthCheckDTO } from '../../types/interface/healthCheckInterface';
 
 // Register ChartJS components
 ChartJS.register(
@@ -31,16 +31,25 @@ ChartJS.register(
 );
 
 interface ResponseTimeChartProps {
-  data: HealthCheck[];
+  data: HealthCheckDTO[];
   timeRange: '1h' | '24h' | '7d' | '30d';
   height?: number;
 }
 
-// Define proper type for chart context
-interface DatasetContext {
-  dataIndex: number;
-  dataset?: any;
-}
+// Helper function to parse the formatted date string from DTO
+const parseFormattedDate = (dateStr: string): Date => {
+  // Format: "19/02/2026, 08:10:31 pm"
+  const [datePart, timePart] = dateStr.split(', ');
+  const [day, month, year] = datePart.split('/').map(Number);
+  const [time, meridian] = timePart.split(' ');
+  const [hours, minutes, seconds] = time.split(':').map(Number);
+  
+  let adjustedHours = hours;
+  if (meridian === 'pm' && adjustedHours !== 12) adjustedHours += 12;
+  if (meridian === 'am' && adjustedHours === 12) adjustedHours = 0;
+  
+  return new Date(year, month - 1, day, adjustedHours, minutes, seconds);
+};
 
 const ResponseTimeChart: React.FC<ResponseTimeChartProps> = ({ 
   data, 
@@ -52,7 +61,7 @@ const ResponseTimeChart: React.FC<ResponseTimeChartProps> = ({
       {
         label: 'Response Time (ms)',
         data: data.map(check => ({
-          x: new Date(check.checkedAt),
+          x: parseFormattedDate(check.checkedAt),
           y: check.responseTime
         })),
         borderColor: 'rgb(59, 130, 246)',
@@ -60,7 +69,7 @@ const ResponseTimeChart: React.FC<ResponseTimeChartProps> = ({
         borderWidth: 2,
         pointRadius: 4,
         pointHoverRadius: 6,
-        pointBackgroundColor: (context: DatasetContext) => {
+        pointBackgroundColor: (context: { dataIndex: number }) => {
           const check = data[context.dataIndex];
           if (!check) return 'rgb(59, 130, 246)';
           return check.status === 'success' 
