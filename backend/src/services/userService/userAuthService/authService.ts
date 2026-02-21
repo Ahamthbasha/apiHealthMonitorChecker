@@ -26,7 +26,8 @@ export class AuthService implements IAuthService {
   }> {
     const existingUser = await this.userRepository.findByEmail(data.email);
     if (existingUser) {
-      throw new AppError('User with this email already exists', 409);
+      // Enhanced: Specific alert for already registered email
+      throw new AppError('This email is already registered. Please login instead.', 409);
     }
     const hashedPassword = await this.hashingService.hash(data.password);
 
@@ -67,7 +68,8 @@ export class AuthService implements IAuthService {
 
     const existingUser = await this.userRepository.findByEmail(data.email);
     if (existingUser) {
-      throw new AppError('User with this email already exists', 409);
+      // Enhanced: Specific alert for already registered email during verification
+      throw new AppError('This email is already registered. Please login instead.', 409);
     }
 
     const user = await this.userRepository.create({
@@ -91,7 +93,7 @@ export class AuthService implements IAuthService {
   async resendOTP(data: IResendOTPDTO): Promise<{ expiresIn: number }> {
     const existingUser = await this.userRepository.findByEmail(data.email);
     if (existingUser && existingUser.isActive) {
-      throw new AppError('This email is already registered and verified.', 409);
+      throw new AppError('This email is already registered and verified. Please login instead.', 409);
     }
 
     return this.otpService.resendOTP(data.email);
@@ -99,21 +101,25 @@ export class AuthService implements IAuthService {
 
   
   async login(data: ILoginDTO): Promise<IAuthResponse> {
+    // First check: Check if email exists
     const user = await this.userRepository.findByEmailWithPassword(data.email);
     if (!user) {
-      throw new AppError('Invalid email or password', 401);
+      // Enhanced: Specific alert for non-existent email
+      throw new AppError('Email not registered. Please register first.', 404);
     }
 
     if (!user.isActive) {
       throw new AppError('Please verify your email first. Check your inbox for OTP.', 403);
     }
 
+    // Second check: Verify password
     const isPasswordValid = await this.hashingService.compare(
       data.password,
       user.password
     );
     if (!isPasswordValid) {
-      throw new AppError('Invalid email or password', 401);
+      // Enhanced: Specific alert for wrong password
+      throw new AppError('Incorrect password. Please try again.', 400);
     }
 
     const tokens = this.jwtService.generateTokenPair({

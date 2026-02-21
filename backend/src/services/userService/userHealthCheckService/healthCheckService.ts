@@ -67,6 +67,7 @@ export class HealthCheckService extends EventEmitter implements IHealthCheckServ
   }
 
   async getEndpointsNeedingCheck(): Promise<IApiEndpoint[]> {
+    // Only get active endpoints for monitoring
     const activeEndpoints = await this.endpointRepository.findAll({ isActive: true });
 
     const endpointsNeedingCheck: IApiEndpoint[] = [];
@@ -107,6 +108,17 @@ export class HealthCheckService extends EventEmitter implements IHealthCheckServ
       const endpoint = await this.endpointRepository.findById(endpointId);
       if (!endpoint) {
         throw new AppError('Endpoint not found', 404);
+      }
+
+      // Skip check if endpoint is not active
+      if (!endpoint.isActive) {
+        console.log(`Endpoint ${endpoint.name} is paused, skipping check`);
+        // Return the last health check if available
+        const lastCheck = await this.healthCheckRepository.findLatestByEndpoint(endpointId);
+        if (lastCheck) {
+          return lastCheck;
+        }
+        throw new AppError('Endpoint is paused and no previous checks available', 400);
       }
 
       console.log(`Checking endpoint: ${endpoint.name} (${endpoint.url})`);
@@ -158,7 +170,6 @@ export class HealthCheckService extends EventEmitter implements IHealthCheckServ
           `Check completed for ${endpoint.name}: ${isSuccess ? 'SUCCESS' : 'FAILURE'} (${responseTime}ms) [Status: ${response.status}]`
         );
       } catch (requestError: unknown) {
-        // requestError is unknown — handleRequestError narrows it internally
         const responseTime = Date.now() - startTime;
         healthCheck = await this.handleRequestError(endpoint, requestError, responseTime);
         console.log(
@@ -203,12 +214,10 @@ export class HealthCheckService extends EventEmitter implements IHealthCheckServ
         errorMessage = error.message || 'Request setup failed';
       }
     } else if (error instanceof Error) {
-      // Non-axios Error subclass
       status = 'failure';
       statusCode = 0;
       errorMessage = error.message;
     } else {
-      // Truly unknown — last resort
       status = 'failure';
       statusCode = 0;
       errorMessage = 'Unknown error occurred';
@@ -242,7 +251,7 @@ export class HealthCheckService extends EventEmitter implements IHealthCheckServ
 
   async checkThresholds(endpointId: string): Promise<boolean> {
     const endpoint = await this.endpointRepository.findById(endpointId);
-    if (!endpoint) return false;
+    if (!endpoint || !endpoint.isActive) return false;
 
     const failureCount = this.failureCounts.get(endpointId) || 0;
 

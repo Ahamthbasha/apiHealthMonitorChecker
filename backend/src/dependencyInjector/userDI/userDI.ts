@@ -100,7 +100,7 @@ export const setWebSocketForApiService = (webSocketService: WebSocketService) =>
     userHealthCheckRepo,
     webSocketService
   );
-  console.log('✅ WebSocket service injected into ApiEndpointService');
+  console.log('WebSocket service injected into ApiEndpointService');
   
   return userApiEndpointService;
 };

@@ -1,8 +1,8 @@
-
 import React, { useState } from 'react';
-import { Plus, Search, User, LogOut, Menu, X } from 'lucide-react';
+import { Plus, Search, Menu, X } from 'lucide-react';
 import { type EndpointStatus } from '../../../types/healthCheck';
 
+// Generate bars based on actual health check data
 const generateBarsFromHistory = (
   _status: EndpointStatus['status'], 
   isActive: boolean,
@@ -12,12 +12,14 @@ const generateBarsFromHistory = (
   const bars: boolean[] = [];
   
   if (!isActive) {
+    // For inactive endpoints, show gray pattern
     for (let i = 0; i < count; i++) {
       bars.push(Math.random() > 0.5);
     }
     return bars;
   }
 
+  // For active endpoints, generate bars based on uptime percentage
   const successRate = uptime / 100;
   
   for (let i = 0; i < count; i++) {
@@ -40,7 +42,6 @@ const UptimeBars: React.FC<UptimeBarsProps> = ({ status, isActive, uptime, count
     generateBarsFromHistory(status, isActive, uptime, count)
   );
   
-  // Different colors for inactive state
   const getBarColor = (isDown: boolean) => {
     if (!isActive) {
       return isDown ? 'bg-gray-600' : 'bg-gray-500';
@@ -68,7 +69,6 @@ interface MonitorRowProps {
 }
 
 const MonitorRow: React.FC<MonitorRowProps> = ({ endpoint, isSelected, onSelect }) => {
-  // Status colors including inactive
   const statusColor = { 
     up: 'bg-green-500', 
     down: 'bg-red-500', 
@@ -88,7 +88,7 @@ const MonitorRow: React.FC<MonitorRowProps> = ({ endpoint, isSelected, onSelect 
       onClick={onSelect}
       className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-all border-l-2 ${
         isSelected ? 'bg-gray-800 border-green-500' : 'border-transparent hover:bg-gray-800/50 hover:border-gray-600'
-      } ${!endpoint.isActive ? 'opacity-60' : ''}`}
+      } ${!endpoint.isActive ? 'opacity-70' : ''}`}
     >
       <div className={`w-2 h-2 rounded-full flex-shrink-0 ${statusColor}`} />
       <div className="flex-1 min-w-0">
@@ -136,10 +136,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   searchTerm,
   isConnected,
   collapsed,
-  userName,
   onSelectEndpoint,
   onAddNew,
-  onLogout,
   onSearchChange,
   onToggleCollapse,
   isMobile = false,
@@ -224,14 +222,19 @@ const Sidebar: React.FC<SidebarProps> = ({
               <div 
                 key={s.endpointId} 
                 onClick={() => handleSelect(s)} 
-                className="flex justify-center py-2 cursor-pointer hover:bg-gray-800" 
-                title={`${s.name} - ${s.uptime.toFixed(0)}% uptime`}
+                className="flex justify-center py-2 cursor-pointer hover:bg-gray-800 relative group" 
+                title={`${s.name} - ${s.uptime.toFixed(0)}% uptime${!s.isActive ? ' (Paused)' : ''}`}
               >
                 <div className={`w-2.5 h-2.5 rounded-full ${
                   s.status === 'up' ? 'bg-green-500' : 
                   s.status === 'degraded' ? 'bg-yellow-500' : 
                   s.status === 'inactive' ? 'bg-gray-500' : 'bg-red-500'
                 }`} />
+                {!s.isActive && (
+                  <span className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-xs text-gray-400 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
+                    Paused
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -248,31 +251,6 @@ const Sidebar: React.FC<SidebarProps> = ({
             {filtered.length === 0 && (
               <div className="px-4 py-8 text-center text-gray-500 text-sm">No monitors found</div>
             )}
-          </div>
-        )}
-      </div>
-
-      {/* Footer */}
-      <div className="p-3 border-t border-gray-700/50 flex-shrink-0">
-        {collapsed && !isMobile ? (
-          <button className="w-full flex justify-center p-2 hover:bg-gray-700 rounded-lg text-gray-400">
-            <User className="w-4 h-4" />
-          </button>
-        ) : (
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center flex-shrink-0">
-              <User className="w-4 h-4 text-gray-300" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-gray-200 font-medium truncate">{userName || 'User'}</p>
-              <p className="text-xs text-gray-500">Free Plan</p>
-            </div>
-            <button 
-              onClick={onLogout} 
-              className="p-1.5 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-white transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
           </div>
         )}
       </div>

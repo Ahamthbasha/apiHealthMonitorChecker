@@ -1,13 +1,11 @@
-
 import React from "react";
-import { Clock, AlertCircle, CheckCircle, XCircle } from "lucide-react";
+import { Clock, AlertCircle, CheckCircle, XCircle, Pause } from "lucide-react";
 import type { HealthCheckDTO } from "../../../types/interface/healthCheckInterface";
 import type { RecentHealthChecksProps } from "./interface/IRecentHealthChecks";
 
-
-
-const StatusBadge: React.FC<{ status: HealthCheckDTO["status"] }> = ({
+const StatusBadge: React.FC<{ status: HealthCheckDTO["status"]; isPaused?: boolean }> = ({
   status,
+  isPaused,
 }) => {
   const config = {
     success: {
@@ -29,7 +27,7 @@ const StatusBadge: React.FC<{ status: HealthCheckDTO["status"] }> = ({
 
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 text-xs font-mono font-bold rounded border ${config.cls}`}
+      className={`inline-flex items-center px-2 py-0.5 text-xs font-mono font-bold rounded border ${config.cls} ${isPaused ? 'opacity-60' : ''}`}
     >
       {config.icon}
       {config.label}
@@ -71,23 +69,6 @@ const RecentHealthChecks: React.FC<RecentHealthChecksProps> = ({
     );
   }
 
-  // If endpoint is inactive, show a message
-  if (!isActive) {
-    return (
-      <div
-        className={`bg-gray-800/30 border border-gray-700/50 rounded-xl p-8 ${className}`}
-      >
-        <div className="text-center text-gray-500">
-          <AlertCircle className="w-12 h-12 mx-auto mb-3 text-gray-600" />
-          <p className="text-gray-400">This monitor is currently paused</p>
-          <p className="text-xs mt-2 text-gray-500">
-            Resume the monitor to see health checks
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div
       className={`bg-gray-800/30 border border-gray-700/50 rounded-xl overflow-hidden ${className}`}
@@ -95,16 +76,22 @@ const RecentHealthChecks: React.FC<RecentHealthChecksProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-700/50">
         <div className="flex items-center gap-2">
-          <Clock className="w-4 h-4 text-green-400" />
+          <Clock className={`w-4 h-4 ${isActive ? 'text-green-400' : 'text-gray-500'}`} />
           <h3 className="text-sm font-semibold text-gray-200 uppercase tracking-wider">
             Recent Logs
           </h3>
+          {!isActive && (
+            <span className="flex items-center gap-1 px-2 py-0.5 bg-gray-700 text-amber-400 text-xs rounded-full border border-amber-500/30">
+              <Pause className="w-3 h-3" />
+              Paused
+            </span>
+          )}
           <span className="text-xs text-gray-500">
             (Last {checks.length} checks)
           </span>
         </div>
 
-        {/* Endpoint Info - Show if available */}
+        {/* Endpoint Info */}
         {endpointName && (
           <div className="text-xs text-gray-500">
             <span className="font-mono">{endpointName}</span>
@@ -135,69 +122,84 @@ const RecentHealthChecks: React.FC<RecentHealthChecksProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-700/20">
-            {checks.map((check) => (
-              <tr
-                key={check.id}
-                className="hover:bg-gray-700/20 transition-colors"
-              >
-                <td className="px-5 py-3">
-                  <StatusBadge status={check.status} />
-                </td>
-                <td className="px-5 py-3">
-                  <span className="text-sm text-gray-400 font-mono">
-                    {check.formattedDateTime || check.formattedTime}
-                  </span>
-                </td>
-                <td className="px-5 py-3">
-                  <span
-                    className={`text-sm font-mono font-semibold ${
-                      check.status === "success"
-                        ? "text-green-400"
-                        : check.status === "timeout"
-                          ? "text-yellow-400"
-                          : "text-red-400"
-                    }`}
-                  >
-                    {check.responseTime}ms
-                  </span>
-                </td>
-                <td className="px-5 py-3">
-                  {check.statusCode ? (
+            {checks.length > 0 ? (
+              checks.map((check) => (
+                <tr
+                  key={check.id}
+                  className={`hover:bg-gray-700/20 transition-colors ${!isActive ? 'opacity-70' : ''}`}
+                >
+                  <td className="px-5 py-3">
+                    <StatusBadge status={check.status} isPaused={!isActive} />
+                  </td>
+                  <td className="px-5 py-3">
+                    <span className="text-sm text-gray-400 font-mono">
+                      {check.formattedDateTime || check.formattedTime}
+                    </span>
+                    {!isActive && (
+                      <span className="ml-2 text-xs text-gray-600">(Historical)</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3">
                     <span
-                      className={`text-sm font-mono ${
-                        check.statusCode >= 200 && check.statusCode < 300
-                          ? "text-green-400"
-                          : check.statusCode >= 400
-                            ? "text-red-400"
-                            : "text-yellow-400"
+                      className={`text-sm font-mono font-semibold ${
+                        !isActive
+                          ? "text-gray-500"
+                          : check.status === "success"
+                            ? "text-green-400"
+                            : check.status === "timeout"
+                              ? "text-yellow-400"
+                              : "text-red-400"
                       }`}
                     >
-                      {check.statusCode}
+                      {check.responseTime}ms
                     </span>
-                  ) : (
-                    <span className="text-gray-600">—</span>
-                  )}
-                </td>
-                <td className="px-5 py-3">
-                  <span
-                    className="text-sm text-gray-500 max-w-xs truncate block"
-                    title={check.errorMessage}
-                  >
-                    {check.errorMessage || (
-                      <span className="text-gray-700">—</span>
+                  </td>
+                  <td className="px-5 py-3">
+                    {check.statusCode ? (
+                      <span
+                        className={`text-sm font-mono ${
+                          !isActive
+                            ? "text-gray-500"
+                            : check.statusCode >= 200 && check.statusCode < 300
+                              ? "text-green-400"
+                              : check.statusCode >= 400
+                                ? "text-red-400"
+                                : "text-yellow-400"
+                        }`}
+                      >
+                        {check.statusCode}
+                      </span>
+                    ) : (
+                      <span className="text-gray-600">—</span>
                     )}
-                  </span>
-                </td>
-              </tr>
-            ))}
-
-            {checks.length === 0 && (
+                  </td>
+                  <td className="px-5 py-3">
+                    <span
+                      className="text-sm text-gray-500 max-w-xs truncate block"
+                      title={check.errorMessage}
+                    >
+                      {check.errorMessage || (
+                        <span className="text-gray-700">—</span>
+                      )}
+                    </span>
+                  </td>
+                </tr>
+              ))
+            ) : (
               <tr>
                 <td
                   colSpan={5}
                   className="px-5 py-8 text-center text-gray-500 text-sm"
                 >
-                  No health checks recorded yet for this endpoint
+                  {!isActive ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <Pause className="w-8 h-8 text-gray-600" />
+                      <p>No health checks recorded yet for this endpoint</p>
+                      <p className="text-xs text-gray-600">Resume monitoring to start receiving checks</p>
+                    </div>
+                  ) : (
+                    "No health checks recorded yet for this endpoint"
+                  )}
                 </td>
               </tr>
             )}

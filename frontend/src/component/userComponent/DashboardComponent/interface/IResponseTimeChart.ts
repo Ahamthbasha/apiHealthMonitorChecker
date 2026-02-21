@@ -4,4 +4,5 @@ export interface ResponseTimeChartProps {
   data: HealthCheck[];
   timeRange?: TimeRange;
   height?: number;
+  isPaused?:boolean
 }
