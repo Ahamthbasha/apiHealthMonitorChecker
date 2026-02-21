@@ -1,4 +1,4 @@
-// components/Footer.tsx
+
 const Footer = () => {
   return (
     <footer className="bg-gray-900 border-t border-gray-700/50 mt-auto">

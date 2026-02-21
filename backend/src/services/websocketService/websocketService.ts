@@ -1,44 +1,15 @@
-// src/services/websocketService/websocketService.ts
 import { Server, Socket } from 'socket.io';
 import { Server as HttpServer } from 'http';
-import { IHealthCheckService, ThresholdAlert } from '../userService/userHealthCheckService/IHealthCheckService';
+import { IHealthCheckService } from '../userService/userHealthCheckService/IHealthCheckService';
 import { IApiEndpointRepository } from '../../repository/userRepo/apiEndpointRepo/IApiEndpointRepo';
 import { IHealthCheck } from '../../models/healthCheckModel';
 import { IJwtService } from '../jwtService/IJwtService';
+import { HealthCheckDTO } from '../../dto/healthCheckDTO';
+import { ConnectedUser, EndpointStatus, IWebSocketService, LiveMetrics, TokenRefreshResponse } from './IWebSocketService';
+import { ThresholdAlert } from '../../dto/healthCheckServiceDTO';
 
-interface ConnectedUser {
-  socketId: string;
-  userId: string;
-  subscribedEndpoints: Set<string>;
-  tokenType: 'access' | 'refresh';
-}
 
-interface LiveMetrics {
-  total: number;
-  up: number;
-  degraded: number;
-  down: number;
-  avgResponse: number;
-  avgUptime: number;
-}
-
-interface EndpointStatus {
-  endpointId: string;
-  name: string;
-  url: string;
-  status: 'up' | 'down' | 'degraded';
-  lastChecked: Date;
-  lastResponseTime: number;
-  uptime: number;
-  currentFailureCount: number;
-}
-
-interface TokenRefreshResponse {
-  accessToken: string;
-  refreshToken: string;
-}
-
-export class WebSocketService {
+export class WebSocketService implements IWebSocketService {
   private io: Server;
   private connectedUsers: Map<string, ConnectedUser> = new Map();
   private healthCheckService: IHealthCheckService;
@@ -65,7 +36,6 @@ export class WebSocketService {
       pingTimeout: 60000,
       pingInterval: 25000,
       cookie: true,
-      // Add connection timeout
       connectTimeout: 10000
     });
 
@@ -74,80 +44,63 @@ export class WebSocketService {
     this.setupHealthCheckListeners();
     this.startBroadcastInterval();
   }
-
-  /**
-   * Setup authentication middleware with dual token support
-   */
   private setupMiddleware() {
     this.io.use(async (socket, next) => {
       try {
-        // Extract tokens from various sources
         const { accessToken, refreshToken } = this.extractTokens(socket);
 
         if (!accessToken) {
-          console.log('❌ No access token found in handshake');
+          console.log('No access token found in handshake');
           return next(new Error('Authentication required'));
         }
 
-        // Try to authenticate with tokens
         const authResult = await this.authenticateWithTokens(accessToken, refreshToken);
         
         if (!authResult.authenticated) {
           return next(new Error(authResult.error || 'Authentication failed'));
         }
 
-        // Set user data in socket
         socket.data.userId = authResult.userId;
         socket.data.tokenType = authResult.tokenType;
         
-        // If tokens were refreshed, send them back to client
         if (authResult.newTokens) {
           socket.emit('tokens-refreshed', authResult.newTokens);
         }
 
-        console.log(`✅ User ${authResult.userId} authenticated with ${authResult.tokenType} token`);
+        console.log(`User ${authResult.userId} authenticated with ${authResult.tokenType} token`);
         next();
       } catch (error) {
-        console.error('❌ Authentication middleware error:', error);
+        console.error('Authentication middleware error:', error);
         next(new Error('Authentication failed'));
       }
     });
   }
 
-  /**
-   * Extract tokens from socket handshake
-   */
+  
   private extractTokens(socket: Socket): { accessToken: string | null; refreshToken: string | null } {
     let accessToken: string | null = null;
     let refreshToken: string | null = null;
 
-    // 1. Check auth object
     if (socket.handshake.auth.token) {
       accessToken = socket.handshake.auth.token;
     }
 
-    // 2. Check cookies
     if (!accessToken && socket.handshake.headers.cookie) {
       const cookies = this.parseCookies(socket.handshake.headers.cookie);
       accessToken = cookies['accessToken'] || null;
       refreshToken = cookies['refreshToken'] || null;
       
       if (Object.keys(cookies).length > 0) {
-        console.log('📦 Cookies received:', Object.keys(cookies));
+        console.log('Cookies received:', Object.keys(cookies));
       }
     }
 
-    // 3. Check query parameters (as fallback)
     if (!accessToken && socket.handshake.query.token) {
       accessToken = socket.handshake.query.token as string;
     }
 
     return { accessToken, refreshToken };
   }
-
-  /**
-   * Parse cookie string into object
-   */
   private parseCookies(cookieString: string): Record<string, string> {
     return cookieString.split(';').reduce((acc, cookie) => {
       const [key, value] = cookie.trim().split('=');
@@ -156,9 +109,6 @@ export class WebSocketService {
     }, {} as Record<string, string>);
   }
 
-  /**
-   * Authenticate user with access and/or refresh tokens
-   */
   private async authenticateWithTokens(
     accessToken: string, 
     refreshToken: string | null
@@ -170,7 +120,6 @@ export class WebSocketService {
     error?: string;
   }> {
     try {
-      // First try to verify with access token
       const decoded = await this.jwtService.verifyAccessToken(accessToken);
       return {
         authenticated: true,
@@ -178,15 +127,12 @@ export class WebSocketService {
         tokenType: 'access'
       };
     } catch (accessError) {
-      console.log('⚠️ Access token verification failed, trying refresh token...');
+      console.log('Access token verification failed, trying refresh token...');
       
-      // If access token is expired but we have refresh token, try refresh
       if (refreshToken) {
         try {
-          // Verify refresh token
           const decoded = await this.jwtService.verifyRefreshToken(refreshToken);
           
-          // Generate new token pair
           const newTokens = this.jwtService.generateTokenPair({
             userId: decoded.userId,
             email: decoded.email,
@@ -200,7 +146,7 @@ export class WebSocketService {
             newTokens
           };
         } catch (refreshError) {
-          console.error('❌ Refresh token verification failed:', refreshError);
+          console.error('Refresh token verification failed:', refreshError);
           return {
             authenticated: false,
             error: 'Invalid refresh token'
@@ -215,17 +161,13 @@ export class WebSocketService {
     }
   }
 
-  /**
-   * Setup socket event handlers
-   */
   private setupEventHandlers() {
     this.io.on('connection', (socket: Socket) => {
       const userId = socket.data.userId;
       const tokenType = socket.data.tokenType;
       
-      console.log(`👤 User ${userId} connected with socket ${socket.id} using ${tokenType} token`);
+      console.log(`User ${userId} connected with socket ${socket.id} using ${tokenType} token`);
 
-      // Register user connection
       this.connectedUsers.set(socket.id, {
         socketId: socket.id,
         userId,
@@ -233,92 +175,95 @@ export class WebSocketService {
         tokenType
       });
 
-      // Handle token update from client
       socket.on('update-tokens', (tokens: { accessToken: string; refreshToken: string }) => {
-        console.log(`🔄 User ${userId} updated tokens`);
-        // You could validate and store these if needed
+        console.log(`User ${userId} updated tokens`);
       });
 
-      // Subscribe to specific endpoint updates
       socket.on('subscribe-endpoint', (endpointId: string) => {
         const user = this.connectedUsers.get(socket.id);
         if (user) {
           user.subscribedEndpoints.add(endpointId);
-          console.log(`📡 User ${userId} subscribed to endpoint ${endpointId}`);
-          
-          // Send latest data for this endpoint immediately
+          console.log(`User ${userId} subscribed to endpoint ${endpointId}`);
           this.sendEndpointLatestData(socket, endpointId);
         }
       });
 
-      // Unsubscribe from endpoint
       socket.on('unsubscribe-endpoint', (endpointId: string) => {
         const user = this.connectedUsers.get(socket.id);
         if (user) {
           user.subscribedEndpoints.delete(endpointId);
-          console.log(`📡 User ${userId} unsubscribed from endpoint ${endpointId}`);
+          console.log(`User ${userId} unsubscribed from endpoint ${endpointId}`);
         }
       });
 
-      // Request initial data for dashboard
       socket.on('request-initial-data', async () => {
         await this.sendInitialData(socket, userId);
       });
 
-      // Request endpoint history
       socket.on('request-endpoint-history', async (data: { endpointId: string; limit?: number }) => {
         await this.sendEndpointHistory(socket, userId, data.endpointId, data.limit);
       });
 
-      // Handle disconnection
       socket.on('disconnect', (reason) => {
-        console.log(`👋 User ${userId} disconnected. Reason: ${reason}`);
+        console.log(`User ${userId} disconnected. Reason: ${reason}`);
         this.connectedUsers.delete(socket.id);
       });
 
-      // Handle errors
       socket.on('error', (error) => {
-        console.error(`❌ Socket error for user ${userId}:`, error);
+        console.error(`Socket error for user ${userId}:`, error);
       });
     });
   }
 
-  /**
-   * Setup health check event listeners
-   */
   private setupHealthCheckListeners() {
-    // Listen for health check events from monitoring engine
     this.healthCheckService.on('check-completed', (result: IHealthCheck) => {
       this.handleCheckCompleted(result);
     });
 
-    // Listen for threshold alerts
     this.healthCheckService.on('threshold-exceeded', (alert: ThresholdAlert) => {
       this.handleThresholdExceeded(alert);
     });
   }
 
-  /**
-   * Start broadcasting live stats periodically
-   */
   private startBroadcastInterval() {
     this.broadcastInterval = setInterval(async () => {
       await this.broadcastLiveStats();
     }, 5000);
   }
 
-  /**
-   * Handle completed health check
-   */
   private async handleCheckCompleted(result: IHealthCheck) {
     try {
       const endpointId = result.endpointId.toString();
+      
+      const endpoint = await this.endpointRepository.findById(endpointId).catch(() => null);
+      
+      if (!endpoint) {
+        console.log(`Endpoint ${endpointId} no longer exists, skipping broadcast`);
+        return;
+      }
+      
       const subscribers = this.findSubscribers(endpointId);
       
       if (subscribers.length > 0) {
-        console.log(`📢 Broadcasting update for endpoint ${endpointId} to ${subscribers.length} subscribers`);
+        console.log(`Broadcasting update for endpoint ${endpointId} to ${subscribers.length} subscribers`);
       }
-
+      const checkedAtDate = new Date(result.checkedAt);
+    const formattedTime = checkedAtDate.toLocaleTimeString("en-US", {
+      hour12: true,
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    });
+    
+    const formattedDateTime = checkedAtDate.toLocaleString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    });
       const updateData = {
         endpointId,
         check: {
@@ -327,7 +272,10 @@ export class WebSocketService {
           responseTime: result.responseTime,
           statusCode: result.statusCode,
           errorMessage: result.errorMessage,
-          checkedAt: result.checkedAt
+          checkedAt: result.checkedAt,
+          formattedTime: formattedTime,
+        formattedDateTime: formattedDateTime,
+        timestamp: checkedAtDate.getTime()
         },
         timestamp: new Date()
       };
@@ -340,9 +288,6 @@ export class WebSocketService {
     }
   }
 
-  /**
-   * Handle threshold exceeded alert
-   */
   private async handleThresholdExceeded(alert: ThresholdAlert) {
     try {
       const endpoint = await this.endpointRepository.findById(alert.endpointId);
@@ -351,7 +296,7 @@ export class WebSocketService {
       const usersToNotify = this.findUsersByEndpoint(alert.endpointId);
       
       if (usersToNotify.length > 0) {
-        console.log(`⚠️ Broadcasting threshold alert for endpoint ${alert.endpointId}`);
+        console.log(`Broadcasting threshold alert for endpoint ${alert.endpointId}`);
       }
 
       const alertData = {
@@ -368,53 +313,48 @@ export class WebSocketService {
     }
   }
 
-  /**
-   * Send initial dashboard data to newly connected client
-   */
   private async sendInitialData(socket: Socket, userId: string) {
-    try {
-      console.log(`📤 Sending initial data to user ${userId}`);
-      
-      // Get all endpoints for user
-      const endpoints = await this.endpointRepository.findByUser(userId);
-      
-      // Get latest status for each endpoint
-      const statuses = await this.healthCheckService.getUserEndpointsStatus(userId);
-      
-      // Get recent checks for each endpoint
-      const recentChecks: Record<string, any[]> = {};
-      await Promise.all(endpoints.map(async (endpoint) => {
-        const history = await this.healthCheckService.getEndpointHistory(
-          endpoint._id.toString(),
-          20
-        );
-        recentChecks[endpoint._id.toString()] = history;
-      }));
+  try {
+    console.log(`Sending initial data to user ${userId}`);
+    
+    const endpoints = await this.endpointRepository.findByUser(userId);
+    const statuses = await this.healthCheckService.getUserEndpointsStatus(userId);
+    
+    // Add isActive to statuses
+    const enrichedStatuses = statuses.map(status => ({
+      ...status,
+      isActive: endpoints.find(e => e._id.toString() === status.endpointId)?.isActive || false
+    }));
+    
+    const recentChecks: Record<string, HealthCheckDTO[]> = {};
+    await Promise.all(endpoints.map(async (endpoint) => {
+      const history = await this.healthCheckService.getEndpointHistory(
+        endpoint._id.toString(),
+        20
+      );
+      recentChecks[endpoint._id.toString()] = history;
+    }));
 
-      // Calculate summary metrics
-      const metrics = this.calculateMetrics(statuses);
+    const metrics = this.calculateMetrics(enrichedStatuses);
 
-      socket.emit('initial-data', {
-        endpoints,
-        statuses,
-        recentChecks,
-        metrics,
-        timestamp: new Date()
-      });
+    socket.emit('initial-data', {
+      endpoints,
+      statuses: enrichedStatuses,
+      recentChecks,
+      metrics,
+      timestamp: new Date()
+    });
 
-      console.log(`✅ Initial data sent to user ${userId}`);
-    } catch (error) {
-      console.error('Error sending initial data:', error);
-      socket.emit('error', { 
-        message: 'Failed to load initial data',
-        code: 'INIT_DATA_ERROR'
-      });
-    }
+    console.log(`Initial data sent to user ${userId}`);
+  } catch (error) {
+    console.error('Error sending initial data:', error);
+    socket.emit('error', { 
+      message: 'Failed to load initial data',
+      code: 'INIT_DATA_ERROR'
+    });
   }
+}
 
-  /**
-   * Send latest data for a specific endpoint
-   */
   private async sendEndpointLatestData(socket: Socket, endpointId: string) {
     try {
       const history = await this.healthCheckService.getEndpointHistory(endpointId, 10);
@@ -431,12 +371,8 @@ export class WebSocketService {
     }
   }
 
-  /**
-   * Send endpoint history to client
-   */
   private async sendEndpointHistory(socket: Socket, userId: string, endpointId: string, limit: number = 50) {
     try {
-      // Verify endpoint belongs to user
       const endpoint = await this.endpointRepository.findByIdAndUser(endpointId, userId);
       if (!endpoint) {
         socket.emit('error', { 
@@ -458,70 +394,70 @@ export class WebSocketService {
     }
   }
 
-  /**
-   * Broadcast live stats to all connected users
-   */
   private async broadcastLiveStats() {
-    // Group users by userId for efficient querying
-    const usersMap = new Map<string, string[]>(); // userId -> socketIds
-    
-    this.connectedUsers.forEach((user, socketId) => {
-      if (!usersMap.has(user.userId)) {
-        usersMap.set(user.userId, []);
-      }
-      usersMap.get(user.userId)!.push(socketId);
-    });
+  const usersMap = new Map<string, string[]>(); // userId -> socketIds
+  
+  this.connectedUsers.forEach((user, socketId) => {
+    if (!usersMap.has(user.userId)) {
+      usersMap.set(user.userId, []);
+    }
+    usersMap.get(user.userId)!.push(socketId);
+  });
 
-    if (usersMap.size === 0) return;
+  if (usersMap.size === 0) return;
 
-    // For each user, get and broadcast their stats
-    const broadcastPromises = Array.from(usersMap.entries()).map(async ([userId, socketIds]) => {
-      try {
-        const statuses = await this.healthCheckService.getUserEndpointsStatus(userId);
-        const metrics = this.calculateMetrics(statuses);
-        
-        const statsData = {
-          statuses,
-          metrics,
-          timestamp: new Date()
-        };
+  const broadcastPromises = Array.from(usersMap.entries()).map(async ([userId, socketIds]) => {
+    try {
+      const endpoints = await this.endpointRepository.findByUser(userId);
+      const statuses = await this.healthCheckService.getUserEndpointsStatus(userId);
+      
+      // Add isActive to statuses
+      const enrichedStatuses = statuses.map(status => ({
+        ...status,
+        isActive: endpoints.find(e => e._id.toString() === status.endpointId)?.isActive || false
+      }));
+      
+      const metrics = this.calculateMetrics(enrichedStatuses);
+      
+      const statsData = {
+        statuses: enrichedStatuses,
+        metrics,
+        timestamp: new Date()
+      };
 
-        socketIds.forEach(socketId => {
-          this.io.to(socketId).emit('live-stats', statsData);
-        });
-      } catch (error) {
-        console.error(`Error broadcasting stats for user ${userId}:`, error);
-      }
-    });
+      socketIds.forEach(socketId => {
+        this.io.to(socketId).emit('live-stats', statsData);
+      });
+    } catch (error) {
+      console.error(`Error broadcasting stats for user ${userId}:`, error);
+    }
+  });
 
-    await Promise.allSettled(broadcastPromises);
-  }
+  await Promise.allSettled(broadcastPromises);
+}
 
-  /**
-   * Calculate live metrics from statuses
-   */
+  
+
   private calculateMetrics(statuses: EndpointStatus[]): LiveMetrics {
-    const total = statuses.length;
-    const up = statuses.filter(s => s.status === 'up').length;
-    const degraded = statuses.filter(s => s.status === 'degraded').length;
-    const down = statuses.filter(s => s.status === 'down').length;
-    
-    const avgResponse = statuses.reduce((acc, s) => acc + s.lastResponseTime, 0) / total || 0;
-    const avgUptime = statuses.reduce((acc, s) => acc + s.uptime, 0) / total || 100;
+  const activeStatuses = statuses.filter(s => s.isActive);
+  const total = activeStatuses.length;
+  const up = activeStatuses.filter(s => s.status === 'up').length;
+  const degraded = activeStatuses.filter(s => s.status === 'degraded').length;
+  const down = activeStatuses.filter(s => s.status === 'down').length;
+  
+  const avgResponse = activeStatuses.reduce((acc, s) => acc + s.lastResponseTime, 0) / total || 0;
+  const avgUptime = activeStatuses.reduce((acc, s) => acc + s.uptime, 0) / total || 100;
 
-    return {
-      total,
-      up,
-      degraded,
-      down,
-      avgResponse: Math.round(avgResponse),
-      avgUptime: Math.round(avgUptime * 100) / 100
-    };
-  }
+  return {
+    total,
+    up,
+    degraded,
+    down,
+    avgResponse: Math.round(avgResponse),
+    avgUptime: Math.round(avgUptime * 100) / 100
+  };
+}
 
-  /**
-   * Find users subscribed to a specific endpoint
-   */
   private findSubscribers(endpointId: string): Array<{ socketId: string; userId: string }> {
     const subscribers: Array<{ socketId: string; userId: string }> = [];
     
@@ -534,9 +470,6 @@ export class WebSocketService {
     return subscribers;
   }
 
-  /**
-   * Find all users connected
-   */
   private findUsersByEndpoint(endpointId: string): Array<{ socketId: string; userId: string }> {
     const users: Array<{ socketId: string; userId: string }> = [];
     
@@ -547,16 +480,20 @@ export class WebSocketService {
     return users;
   }
 
-  /**
-   * Get count of connected users
-   */
+  private findSocketsByUserId(userId: string): string[] {
+    const sockets: string[] = [];
+    this.connectedUsers.forEach((user, socketId) => {
+      if (user.userId === userId) {
+        sockets.push(socketId);
+      }
+    });
+    return sockets;
+  }
+
   public getConnectedUsersCount(): number {
     return this.connectedUsers.size;
   }
 
-  /**
-   * Get connection statistics
-   */
   public getConnectionStats() {
     const usersByUserId = new Map<string, number>();
     
@@ -577,23 +514,18 @@ export class WebSocketService {
     };
   }
 
-  /**
-   * Refresh tokens for a specific user
-   */
   public async refreshUserTokens(userId: string): Promise<boolean> {
     try {
       const userSockets = this.findSocketsByUserId(userId);
       if (userSockets.length === 0) return false;
 
-      // You would typically get user data from database
-      // This is a placeholder - implement based on your needs
       const user = await this.endpointRepository.findById(userId);
       if (!user) return false;
 
       const newTokens = this.jwtService.generateTokenPair({
         userId: user._id.toString(),
-        email: '', // You'd need to get email from somewhere
-        role: 'user' // Default role
+        email: '',
+        role: 'user'
       });
 
       userSockets.forEach(socketId => {
@@ -607,34 +539,47 @@ export class WebSocketService {
     }
   }
 
-  /**
-   * Find all socket IDs for a user
-   */
-  private findSocketsByUserId(userId: string): string[] {
-    const sockets: string[] = [];
-    this.connectedUsers.forEach((user, socketId) => {
-      if (user.userId === userId) {
-        sockets.push(socketId);
+  public notifyEndpointDeleted(endpointId: string, userId: string): void {
+    try {
+      console.log(`Notifying users about deleted endpoint: ${endpointId}`);
+      
+      const userSockets = this.findSocketsByUserId(userId);
+      
+      if (userSockets.length > 0) {
+        const deleteData = {
+          endpointId,
+          timestamp: new Date()
+        };
+        
+        userSockets.forEach(socketId => {
+          this.io.to(socketId).emit('endpoint-deleted', deleteData);
+        });
+        
+        console.log(`Sent deletion notification to ${userSockets.length} sockets for user ${userId}`);
       }
-    });
-    return sockets;
+      
+      this.connectedUsers.forEach((user, socketId) => {
+        if (user.userId === userId) {
+          user.subscribedEndpoints.delete(endpointId);
+        }
+      });
+      
+    } catch (error) {
+      console.error('Error notifying endpoint deletion:', error);
+    }
   }
 
-  /**
-   * Clean up resources on shutdown
-   */
   public cleanup() {
-    console.log('🧹 Cleaning up WebSocket service...');
+    console.log('Cleaning up WebSocket service...');
     
     if (this.broadcastInterval) {
       clearInterval(this.broadcastInterval);
       this.broadcastInterval = null;
     }
     
-    // Disconnect all sockets
     this.io.disconnectSockets(true);
     this.connectedUsers.clear();
     
-    console.log('✅ WebSocket service cleaned up');
+    console.log('WebSocket service cleaned up');
   }
 }

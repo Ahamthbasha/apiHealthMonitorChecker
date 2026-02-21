@@ -1,4 +1,4 @@
-// src/controllers/apiEndpointController/apiEndpointController.ts
+
 import { Request, Response, NextFunction } from 'express';
 import { AuthRequest } from '../../../middlewares/authMiddleware'; 
 import { IApiEndpointController } from './IUserApiEndpointController'; 
@@ -49,7 +49,7 @@ export class ApiEndpointController implements IApiEndpointController {
         throw new AppError('User not authenticated', 401);
       }
 
-      const { endpointId } = req.params; // Changed from 'id' to 'endpointId'
+      const { endpointId } = req.params;
       const endpoint = await this.endpointService.getEndpointById(endpointId, req.user.userId);
 
       res.status(200).json({
@@ -68,7 +68,7 @@ export class ApiEndpointController implements IApiEndpointController {
         throw new AppError('User not authenticated', 401);
       }
 
-      const { endpointId } = req.params; // Changed from 'id' to 'endpointId'
+      const { endpointId } = req.params; 
       const updateData = req.body;
 
       const endpoint = await this.endpointService.updateEndpoint(endpointId, req.user.userId, updateData);
@@ -89,7 +89,7 @@ export class ApiEndpointController implements IApiEndpointController {
         throw new AppError('User not authenticated', 401);
       }
 
-      const { endpointId } = req.params; // Changed from 'id' to 'endpointId'
+      const { endpointId } = req.params;
       await this.endpointService.deleteEndpoint(endpointId, req.user.userId);
 
       res.status(200).json({
@@ -107,7 +107,7 @@ export class ApiEndpointController implements IApiEndpointController {
         throw new AppError('User not authenticated', 401);
       }
 
-      const { endpointId } = req.params; // Changed from 'id' to 'endpointId'
+      const { endpointId } = req.params;
       const endpoint = await this.endpointService.toggleEndpoint(endpointId, req.user.userId);
 
       res.status(200).json({

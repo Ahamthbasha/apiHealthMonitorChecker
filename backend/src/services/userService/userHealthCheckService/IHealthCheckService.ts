@@ -1,48 +1,23 @@
-import { HealthCheckDTO } from "../../../dto/healthCheckDTO";
-import { IHealthCheck } from "../../../models/healthCheckModel";
-import { EventEmitter } from 'events';
 
-export interface EndpointStatus {
-  endpointId: string;
-  name: string;
-  url: string;
-  status: 'up' | 'down' | 'degraded';
-  lastChecked: Date;
-  lastResponseTime: number;
-  uptime: number;
-  currentFailureCount: number;
-}
-
-// Define event types
-export interface HealthCheckEvents {
-  'check-completed': (result: IHealthCheck) => void;
-  'threshold-exceeded': (alert: ThresholdAlert) => void;
-}
-
-export interface ThresholdAlert {
-  endpointId: string;
-  endpointName: string;
-  failureCount: number;
-  threshold: number;
-  timestamp: Date;
-}
+import { HealthCheckDTO } from '../../../dto/healthCheckDTO';
+import { IHealthCheck } from '../../../models/healthCheckModel';
+import { IApiEndpoint } from '../../../models/apiEndpointModel';
+import { EndpointStatsResponse, EndpointStatus, HealthCheckEvents, PaginatedHealthChecks } from '../../../dto/healthCheckServiceDTO';
 
 export interface IHealthCheckService {
-  // Monitoring methods
   startMonitoring(): void;
   stopMonitoring(): void;
   checkEndpoint(endpointId: string): Promise<IHealthCheck>;
-  
-  // Data retrieval methods
+
   getEndpointHistory(endpointId: string, limit?: number): Promise<HealthCheckDTO[]>;
-  getEndpointStats(endpointId: string, hours?: number): Promise<any>;
+  getAllHealthChecks(endpointId: string, page?: number, limit?: number, status?: string): Promise<PaginatedHealthChecks>;
+  getEndpointStats(endpointId: string, hours?: number): Promise<EndpointStatsResponse>; 
   getUserEndpointsStatus(userId: string): Promise<EndpointStatus[]>;
-  
-  // Alert methods
+  getRecentHealthChecks(endpointId: string, limit?: number): Promise<HealthCheckDTO[]>;
+
   checkThresholds(endpointId: string): Promise<boolean>;
-  getEndpointsNeedingCheck(): Promise<any[]>;
-  
-  // Event emitter methods
+  getEndpointsNeedingCheck(): Promise<IApiEndpoint[]>; 
+
   on<K extends keyof HealthCheckEvents>(event: K, listener: HealthCheckEvents[K]): this;
   emit<K extends keyof HealthCheckEvents>(event: K, ...args: Parameters<HealthCheckEvents[K]>): boolean;
   removeListener<K extends keyof HealthCheckEvents>(event: K, listener: HealthCheckEvents[K]): this;

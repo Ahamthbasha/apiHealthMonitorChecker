@@ -1,16 +1,6 @@
 import jwt, { Secret, SignOptions } from "jsonwebtoken";
-import { IJwtService, IRegistrationPayload } from "./IJwtService";
+import { IJwtPayload, IJwtService, IRegistrationPayload, ITokenPair } from "./IJwtService";
 
-export interface IJwtPayload {
-  userId: string;
-  email: string;
-  role: string;
-}
-
-export interface ITokenPair {
-  accessToken: string;
-  refreshToken: string;
-}
 
 export class JwtService implements IJwtService {
   private accessSecret: Secret;

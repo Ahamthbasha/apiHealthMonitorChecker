@@ -1,3 +1,4 @@
+
 import { IUserRepository } from "../../repository/userRepo/userAuthRepo/IuserAuthRepo"; 
 import { UserRepository } from "../../repository/userRepo/userAuthRepo/userAuthRepo";
 
@@ -26,7 +27,6 @@ import { OTPService } from "../../services/otpService/otpService";
 import { IEmailService } from "../../services/emailService/IEmailService"; 
 import { EmailService } from "../../services/emailService/emailService";
 
-
 import { IApiEndpointRepository } from "../../repository/userRepo/apiEndpointRepo/IApiEndpointRepo"; 
 import { ApiEndpointRepository } from "../../repository/userRepo/apiEndpointRepo/apiEndpointRepo"; 
 import { IApiEndpointService } from "../../services/userService/userApiService/IApiEndpointService"; 
@@ -44,13 +44,11 @@ import { HealthCheckController } from "../../controller/userController/userHealt
 import { WebSocketService } from "../../services/websocketService/websocketService";
 import { Server as HttpServer } from "http";
 
-
 const hasGmailConfig = process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD;
 
 let emailService: IEmailService;
 
 if (hasGmailConfig) {
-  // Production mode - Use real Gmail SMTP
   emailService = new EmailService({
     user: process.env.GMAIL_USER!,
     pass: process.env.GMAIL_APP_PASSWORD!,
@@ -58,7 +56,6 @@ if (hasGmailConfig) {
   });
   console.log('📧 Using Gmail SMTP for emails');
 } else {
-  // Development mode - Fallback to console logging
   console.warn('⚠️ Gmail credentials not found. Using console logging for emails.');
   emailService = {
     sendOTPEmail: async (email: string, otp: string) => {
@@ -72,39 +69,46 @@ if (hasGmailConfig) {
   } as IEmailService;
 }
 
+const otpRepo: IOTPRepository = new OTPRepository();
+const otpService: IOTPService = new OTPService(otpRepo, emailService);
 
-const otpRepo : IOTPRepository = new OTPRepository()
-const otpService : IOTPService = new OTPService(otpRepo,emailService)
+const hashService: IHashingService = new HashingService();
+const jwtService: IJwtService = new JwtService();
 
-const hashService : IHashingService = new HashingService()
-const jwtService : IJwtService = new JwtService()
+const userRepo: IUserRepository = new UserRepository();
+const userService: IAuthService = new AuthService(userRepo, hashService, jwtService, otpService, emailService);
+const userAssignService: IUserService = new UserService(userRepo);
+const userController: IAuthController = new AuthController(userService, userAssignService);
 
-const userRepo : IUserRepository = new UserRepository()
-const userService : IAuthService = new AuthService(userRepo,hashService,jwtService,otpService,emailService)
-const userAssignService : IUserService = new UserService(userRepo)
-const userController : IAuthController = new AuthController(userService,userAssignService)
-
-const authMiddleware : IAuthMiddleware = new AuthMiddleware(jwtService,userRepo)
-
-// api endpoint repository
+const authMiddleware: IAuthMiddleware = new AuthMiddleware(jwtService, userRepo);
 
 const userApiEndpointRepository: IApiEndpointRepository = new ApiEndpointRepository();
+const userHealthCheckRepo: IHealthCheckRepository = new HealthCheckRepository();
 
-const userApiEndpointService: IApiEndpointService = new ApiEndpointService(userApiEndpointRepository);
-
-const userApiEndpointController: IApiEndpointController = new ApiEndpointController(userApiEndpointService);
-
-// healthcheck
-
-const userHealthCheckRepo : IHealthCheckRepository = new HealthCheckRepository()
-
-const userHealthCheckService: IHealthCheckService = new HealthCheckService(userHealthCheckRepo,userApiEndpointRepository)
-
-const userHealthCheckController : IHealthCheckController = new HealthCheckController(userHealthCheckService)
+const userHealthCheckService: IHealthCheckService = new HealthCheckService(userHealthCheckRepo, userApiEndpointRepository);
 
 let wsService: WebSocketService | null = null;
 
-// Function to initialize WebSocket with HTTP server
+let userApiEndpointService: IApiEndpointService = new ApiEndpointService(
+  userApiEndpointRepository, 
+  userHealthCheckRepo
+);
+
+export const setWebSocketForApiService = (webSocketService: WebSocketService) => {
+  userApiEndpointService = new ApiEndpointService(
+    userApiEndpointRepository,
+    userHealthCheckRepo,
+    webSocketService
+  );
+  console.log('✅ WebSocket service injected into ApiEndpointService');
+  
+  return userApiEndpointService;
+};
+
+const userApiEndpointController: IApiEndpointController = new ApiEndpointController(userApiEndpointService);
+
+const userHealthCheckController: IHealthCheckController = new HealthCheckController(userHealthCheckService);
+
 export const initializeWebSocket = (server: HttpServer): WebSocketService => {
   if (!wsService) {
     wsService = new WebSocketService(
@@ -113,26 +117,24 @@ export const initializeWebSocket = (server: HttpServer): WebSocketService => {
       userApiEndpointRepository,
       jwtService
     );
-    console.log('🔌 WebSocket service initialized');
+    console.log('WebSocket service initialized');
+    
+    setWebSocketForApiService(wsService);
   }
   return wsService;
 };
 
-// Function to get WebSocket service instance
 export const getWebSocketService = (): WebSocketService | null => {
   return wsService;
 };
 
-
 export const startMonitoringEngine = () => {
   userHealthCheckService.startMonitoring();
   
-  // Handle graceful shutdown
   process.on('SIGTERM', () => {
     console.log('SIGTERM received, stopping monitoring engine...');
     userHealthCheckService.stopMonitoring();
     
-    // Clean up WebSocket connections
     if (wsService) {
       wsService.cleanup();
     }
@@ -144,18 +146,17 @@ export const startMonitoringEngine = () => {
     console.log('SIGINT received, stopping monitoring engine...');
     userHealthCheckService.stopMonitoring();
     
-    // Clean up WebSocket connections
     if (wsService) {
       wsService.cleanup();
     }
     
     process.exit(0);
   });
-}
+};
 
 export {
-    userController,
-    authMiddleware,
-    userApiEndpointController,
-    userHealthCheckController
-}
+  userController,
+  authMiddleware,
+  userApiEndpointController,
+  userHealthCheckController
+};

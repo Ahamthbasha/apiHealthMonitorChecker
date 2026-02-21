@@ -4,7 +4,7 @@ export interface IEmailService {
 }
 
 export interface IEmailConfig {
-  user: string;      // Gmail address
-  pass: string;      // Gmail App Password
-  fromName?: string; // Display name
+  user: string;     
+  pass: string;      
+  fromName?: string; 
 }

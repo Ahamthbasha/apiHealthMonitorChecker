@@ -1,4 +1,4 @@
-// src/models/healthCheckModel.ts
+
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IHealthCheckData {
@@ -66,11 +66,9 @@ const healthCheckSchema = new Schema<IHealthCheck>({
   timestamps: true
 });
 
-// Compound indexes for efficient querying
 healthCheckSchema.index({ endpointId: 1, checkedAt: -1 });
 healthCheckSchema.index({ userId: 1, checkedAt: -1 });
 healthCheckSchema.index({ status: 1, checkedAt: -1 });
-// TTL index to automatically clean up old records after 30 days
 healthCheckSchema.index({ checkedAt: 1 }, { expireAfterSeconds: 30 * 24 * 60 * 60 });
 
 export const HealthCheck = mongoose.model<IHealthCheck>('HealthCheck', healthCheckSchema);

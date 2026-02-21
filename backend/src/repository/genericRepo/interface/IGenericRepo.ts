@@ -10,4 +10,5 @@ export interface IGenericRepository<T extends Document> {
   delete(id: string): Promise<T | null>;
   exists(filter: FilterQuery<T>): Promise<boolean>;
   count(filter?: FilterQuery<T>): Promise<number>;
+  deleteMany(filter: object): Promise<void>;
 }

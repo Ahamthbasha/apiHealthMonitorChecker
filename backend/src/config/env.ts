@@ -1,20 +1,16 @@
-// src/config/env.ts
+
 import dotenv from "dotenv";
 import path from "path";
 
-// Determine which env file to load based on NODE_ENV
 const envFile = process.env.NODE_ENV === "production" 
   ? ".env.production" 
   : ".env.development";
 
-// Load environment variables
 dotenv.config({ path: path.resolve(process.cwd(), envFile) });
 
-// Log which env file is loaded
-console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-console.log(`📁 Loaded env file: ${envFile}`);
+console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+console.log(`Loaded env file: ${envFile}`);
 
-// Validate critical environment variables
 const criticalEnvVars = [
   "MONGODB_URI",
   "BCRYPT_SALT_ROUNDS",
@@ -25,11 +21,10 @@ const criticalEnvVars = [
 const missingVars = criticalEnvVars.filter(key => !process.env[key]);
 
 if (missingVars.length > 0) {
-  console.error(`❌ Missing critical environment variables: ${missingVars.join(', ')}`);
+  console.error(`Missing critical environment variables: ${missingVars.join(', ')}`);
   process.exit(1);
 }
 
-// Export validated environment variables (optional)
 export const env = {
   NODE_ENV: process.env.NODE_ENV,
   PORT: parseInt(process.env.PORT || '3000', 10),

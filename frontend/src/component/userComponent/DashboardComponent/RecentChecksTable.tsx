@@ -1,14 +1,10 @@
-// components/dashboard/RecentChecksTable.tsx
+
 import React from 'react';
 import { ExternalLink } from 'lucide-react';
-import {type HealthCheckDTO } from '../../../types/dashboard';
+import { type HealthCheck } from '../../../types/healthCheck';
+import type { RecentChecksTableProps } from './interface/IRecentChecksTable';
 
-interface RecentChecksTableProps {
-  history: HealthCheckDTO[];
-  onViewAll: () => void;
-}
-
-const StatusBadge: React.FC<{ status: HealthCheckDTO['status'] }> = ({ status }) => {
+const StatusBadge: React.FC<{ status: HealthCheck['status'] }> = ({ status }) => {
   const config = {
     success: { label: 'OK', cls: 'bg-green-500/10 text-green-400 border-green-500/20' },
     failure: { label: 'FAIL', cls: 'bg-red-500/10 text-red-400 border-red-500/20' },

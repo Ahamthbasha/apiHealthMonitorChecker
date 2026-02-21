@@ -6,12 +6,9 @@ import { Routes, Route } from "react-router-dom";
 import UserSessionRoute from "../protecter/userProtecter/UserSessionRoute";
 import OTPVerification from "../pages/user/Auth/OTPVerification";
 import UserPrivateRoute from "../protecter/userProtecter/UserPrivateRoute";
-// import Dashboard from "../pages/user/Dashboard/Dashboard";
 import EndpointForm from "../pages/user/endpoint/EndpointForm";
-import EndpointDetails from "../pages/user/endpoint/EndointDetails";
-import EndpointHealthDashboard from "../pages/user/health/EndpointHealthDashboard";
-import EndpointHealthHistory from "../pages/user/health/EndpointHealthHistory";
 import UptimeKumaDashboard from "../pages/user/Dashboard/UptimeKumaDashboard";
+import EndpointHistoryPage from "../pages/user/endpoint/EndpointHistoryPage";
 
 const UserRouter = () => {
   return (
@@ -39,12 +36,9 @@ const UserRouter = () => {
 
         <Route path="/" element={<UserPrivateRoute/>}>
         <Route path="dashboard" element={<UptimeKumaDashboard/>}/>
-
-        <Route path="health" element={<EndpointHealthDashboard/>}/>
-        <Route path="health/:endpointId" element={<EndpointHealthHistory/>}/>
         <Route path="endpoints/create" element={<EndpointForm/>}/>
-        <Route path="endpoints/:endpointId" element={<EndpointDetails/>}/>
         <Route path="endpoints/:endpointId/edit" element={<EndpointForm/>}/>
+        <Route path="endpoints/:endpointId/history" element={<EndpointHistoryPage/>}/>
         </Route>
       </Route>
     </Routes>

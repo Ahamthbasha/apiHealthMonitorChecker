@@ -25,7 +25,7 @@ const otpSchema = new Schema<IOTP>(
   }
 );
 
-// TTL index - auto-delete documents 60 seconds after creation
+
 otpSchema.index({ createdAt: 1 }, { expireAfterSeconds: 60 });
 
 export const OTP = mongoose.model<IOTP>('OTP', otpSchema);

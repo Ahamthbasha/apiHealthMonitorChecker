@@ -44,4 +44,8 @@ export class GenericRepository<T extends Document> implements IGenericRepository
   async count(filter: FilterQuery<T> = {}): Promise<number> {
     return await this.model.countDocuments(filter).exec();
   }
+
+  async deleteMany(filter: object): Promise<void> {
+    await this.model.deleteMany(filter).exec();
+  }
 }

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { authMiddleware, userApiEndpointController, userController, userHealthCheckController} from '../dependencyInjector/userDI/userDI'
 import { loginValidation, registerValidation, validateRequest } from '../validationMiddleware/registerLoginValidator' 
 import { createEndpointValidation, endpointIdValidation, updateEndpointValidation } from "../validationMiddleware/apiEndpointValidator";
-import { historyQueryValidation, statsQueryValidation } from "../validationMiddleware/healthCheckValidator";
+import { allChecksValidation, historyQueryValidation, recentChecksValidation, statsQueryValidation } from "../validationMiddleware/healthCheckValidator";
 
 const router = Router();
 
@@ -41,6 +41,12 @@ router.get(
 )
 
 router.get(
+  '/endpoints/:endpointId/all-checks',
+  allChecksValidation,
+  userHealthCheckController.getAllHealthChecks
+)
+
+router.get(
     '/endpoints/:endpointId/stats',
     statsQueryValidation,
     userHealthCheckController.getEndpointStats
@@ -51,5 +57,11 @@ router.post(
     endpointIdValidation,
     userHealthCheckController.triggerManualCheck
 )
+
+router.get(
+  '/endpoints/:endpointId/recentCheck',
+  recentChecksValidation,
+  userHealthCheckController.getRecentHealthChecks
+);
 
 export default router;

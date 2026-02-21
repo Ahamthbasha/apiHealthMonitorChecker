@@ -1,18 +1,15 @@
-
-export interface HealthCheck {
-  _id: string;
-  endpointId: string;
-  userId: string;
-  status: 'success' | 'failure' | 'timeout';
-  responseTime: number;
-  statusCode?: number;
-  errorMessage?: string;
-  checkedAt: string;
-  responseHeaders?: Record<string, string>;
-  responseBody?: string;
-  createdAt: string;
-  updatedAt: string;
+export interface PaginatedResponse<T> {
+  success: boolean;
+  data: T[];
+  pagination: {
+    total: number;
+    page: number;
+    totalPages: number;
+    limit: number;
+  };
+  message: string;
 }
+
 
 export interface HealthCheckDTO {
   id: string;
@@ -22,8 +19,22 @@ export interface HealthCheckDTO {
   statusCode?: number;
   errorMessage?: string;
   checkedAt: string;
+  formattedTime:string;
+  formattedDateTime:string;
 }
 
+export interface HealthCheck {
+  _id: string;
+  endpointId: string;
+  userId: string;
+  status: 'success' | 'failure' | 'timeout';
+  responseTime: number;
+  statusCode?: number;
+  errorMessage?: string;
+  checkedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 export interface EndpointStatus {
   endpointId: string;
@@ -31,9 +42,14 @@ export interface EndpointStatus {
   url: string;
   status: 'up' | 'down' | 'degraded';
   lastChecked: string;
-  responseTime: number;
+  lastResponseTime: number;
   uptime: number;
   currentFailureCount: number;
+  interval?: number;
+  thresholds?: {
+    maxResponseTime: number;
+    failureThreshold: number;
+  };
 }
 
 export interface EndpointStats {
@@ -46,21 +62,4 @@ export interface EndpointStats {
   endpointName: string;
   endpointUrl: string;
   period: string;
-}
-
-export interface DashboardMetrics {
-  totalEndpoints: number;
-  activeEndpoints: number;
-  inactiveEndpoints: number;
-  totalChecks: number;
-  avgResponseTime: number;
-  overallUptime: number;
-  endpointsAtRisk: number;
-}
-
-// Add to ApiResponse type if not already there
-export interface ApiResponse<T> {
-  success: boolean;
-  message: string;
-  data: T;
 }

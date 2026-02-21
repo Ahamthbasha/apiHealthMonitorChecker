@@ -1,5 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import { AppError } from '../utils/errorUtil/appError'; 
+import { AppError } from '../utils/errorUtil/appError';
+
+interface MongoError extends Error {
+  code?: number;
+  keyPattern?: Record<string, unknown>;
+}
 
 export const errorHandler = (
   err: Error | AppError,
@@ -9,7 +14,7 @@ export const errorHandler = (
 ): void => {
   let statusCode = 500;
   let message = 'Internal Server Error';
-  let errors: any = undefined;
+  let errors: string | undefined = undefined;
 
   if (err instanceof AppError) {
     statusCode = err.statusCode;
@@ -21,10 +26,11 @@ export const errorHandler = (
   } else if (err.name === 'CastError') {
     statusCode = 400;
     message = 'Invalid ID format';
-  } else if ((err as any).code === 11000) {
+  } else if ((err as MongoError).code === 11000) {
     statusCode = 409;
     message = 'Duplicate field value entered';
-    const field = Object.keys((err as any).keyPattern)[0];
+    const keyPattern = (err as MongoError).keyPattern;
+    const field = keyPattern ? Object.keys(keyPattern)[0] : 'field';
     errors = `${field} already exists`;
   } else if (err.name === 'JsonWebTokenError') {
     statusCode = 401;
@@ -34,7 +40,6 @@ export const errorHandler = (
     message = 'Token expired';
   }
 
-  // Log error in development
   if (process.env.nodeEnv === 'development') {
     console.error('Error:', err);
   }

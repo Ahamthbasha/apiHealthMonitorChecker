@@ -20,6 +20,10 @@ const userRouterEndPoints = {
     `/api/user/endpoints/${endpointId}/stats${hours ? `?hours=${hours}` : ""}`,
   triggerManualCheck: (endpointId: string) =>
     `/api/user/endpoints/${endpointId}/check`,
+   getRecentHealthChecks: (endpointId: string, limit?: number) => 
+    `/api/user/endpoints/${endpointId}/recentCheck${limit ? `?limit=${limit}` : ""}`,
+   getAllHealthChecks: (endpointId: string) =>
+    `/api/user/endpoints/${endpointId}/all-checks`,
 };
 
 export default userRouterEndPoints;

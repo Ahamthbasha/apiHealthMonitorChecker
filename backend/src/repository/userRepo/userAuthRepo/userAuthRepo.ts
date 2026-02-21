@@ -23,29 +23,4 @@ export class UserRepository extends GenericRepository<IUser> implements IUserRep
     return super.findById(id); 
   }
 
-  async searchUsers(query: string, excludeUserId: string): Promise<IUser[]> {
-    if (!query || query.length < 2) return [];
-    
-    return this.model.find({
-      _id: { $ne: excludeUserId },
-      isActive: true,
-      $or: [
-        { name: { $regex: query, $options: 'i' } },
-        { email: { $regex: query, $options: 'i' } }
-      ]
-    })
-    .select('_id name email role')
-    .limit(10)
-    .lean();
-  }
-
-  async getAllActiveUsers(excludeUserId: string): Promise<IUser[]> {
-    return this.model.find({
-      _id: { $ne: excludeUserId },
-      isActive: true
-    })
-    .select('_id name email role')
-    .limit(50)
-    .lean();
-  }
 }

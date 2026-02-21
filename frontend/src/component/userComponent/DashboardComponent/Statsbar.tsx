@@ -1,12 +1,8 @@
-// components/dashboard/StatsBar.tsx
-import React from 'react';
-import type { EndpointStats, TimeRange } from '../../../types/dashboard';
 
-interface StatsBarProps {
-  stats: EndpointStats;
-  timeRange: TimeRange;
-  onTimeRangeChange: (r: TimeRange) => void;
-}
+import React from 'react';
+import type { TimeRange } from '../../../types/healthCheck';
+import type { StatsBarProps } from './interface/IStatsbar';
+
 
 const StatItem: React.FC<{
   label: string;
@@ -30,20 +26,66 @@ const StatItem: React.FC<{
 const StatsBar: React.FC<StatsBarProps> = ({ stats, timeRange, onTimeRangeChange }) => {
   const timeRanges: TimeRange[] = ['1h', '24h', '7d', '30d'];
 
-  const uptimeColor =
-    stats.uptime >= 99 ? 'text-green-400' : stats.uptime >= 95 ? 'text-yellow-400' : 'text-red-400';
+  const uptimeColor = !stats.isActive 
+    ? 'text-gray-400'
+    : stats.uptime >= 99 ? 'text-green-400' 
+      : stats.uptime >= 95 ? 'text-yellow-400' 
+        : 'text-red-400';
+
+  // Determine color for current response based on status and active state
+  const responseColor = !stats.isActive 
+    ? 'text-gray-400'
+    : stats.latestStatus === 'success' ? 'text-green-400' 
+      : stats.latestStatus === 'failure' ? 'text-red-400' 
+        : stats.latestStatus === 'timeout' ? 'text-yellow-400' 
+          : 'text-blue-400';
+
+  // Use latestResponseTime if available and endpoint is active, otherwise show placeholder
+  const currentResponseTime = !stats.isActive 
+    ? '—' 
+    : (stats.latestResponseTime !== undefined 
+      ? Math.round(stats.latestResponseTime) 
+      : Math.round(stats.avgResponseTime));
 
   const items = [
-    { label: 'Response', sublabel: 'Current', value: `${Math.round(stats.avgResponseTime)}`, unit: 'ms', color: 'text-blue-400' },
-    { label: 'Avg Response', sublabel: '24-hour', value: `${Math.round(stats.avgResponseTime)}`, unit: 'ms', color: 'text-blue-300' },
-    { label: 'Uptime', sublabel: '24-hour', value: `${stats.uptime.toFixed(2)}%`, color: uptimeColor },
-    {
-      label: 'Success', sublabel: `${stats.successCount} checks`,
-      value: `${stats.totalChecks > 0 ? ((stats.successCount / stats.totalChecks) * 100).toFixed(1) : 0}%`,
-      color: 'text-green-400',
+    { 
+      label: 'Current', 
+      sublabel: 'Response', 
+      value: currentResponseTime, 
+      unit: 'ms', 
+      color: responseColor
     },
-    { label: 'Failures', sublabel: `${stats.failureCount} checks`, value: stats.failureCount, color: stats.failureCount > 0 ? 'text-red-400' : 'text-gray-500' },
-    { label: 'Timeouts', sublabel: `${stats.timeoutCount} checks`, value: stats.timeoutCount, color: stats.timeoutCount > 0 ? 'text-orange-400' : 'text-gray-500' },
+    { 
+      label: 'Avg Response', 
+      sublabel: timeRange, 
+      value: !stats.isActive ? '—' : `${Math.round(stats.avgResponseTime)}`, 
+      unit: 'ms', 
+      color: !stats.isActive ? 'text-gray-400' : 'text-blue-400' 
+    },
+    { 
+      label: 'Uptime', 
+      sublabel: timeRange, 
+      value: !stats.isActive ? '—' : `${stats.uptime.toFixed(2)}%`, 
+      color: uptimeColor 
+    },
+    {
+      label: 'Success', 
+      sublabel: 'checks',
+      value: !stats.isActive ? '—' : stats.successCount,
+      color: !stats.isActive ? 'text-gray-400' : 'text-green-400',
+    },
+    { 
+      label: 'Failures', 
+      sublabel: `${stats.failureCount} checks`, 
+      value: !stats.isActive ? '—' : stats.failureCount, 
+      color: !stats.isActive ? 'text-gray-400' : (stats.failureCount > 0 ? 'text-red-400' : 'text-gray-500') 
+    },
+    { 
+      label: 'Timeouts', 
+      sublabel: `${stats.timeoutCount} checks`, 
+      value: !stats.isActive ? '—' : stats.timeoutCount, 
+      color: !stats.isActive ? 'text-gray-400' : (stats.timeoutCount > 0 ? 'text-yellow-400' : 'text-gray-500') 
+    },
   ];
 
   return (
@@ -63,7 +105,7 @@ const StatsBar: React.FC<StatsBarProps> = ({ stats, timeRange, onTimeRangeChange
         ))}
       </div>
 
-      {/* 2-col on mobile, 3-col on sm, 6-col on md+ */}
+      {/* Stats grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 divide-x divide-y md:divide-y-0 divide-gray-700/40">
         {items.map((item) => (
           <StatItem key={item.label} {...item} />

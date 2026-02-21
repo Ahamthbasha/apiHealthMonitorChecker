@@ -1,4 +1,4 @@
-// src/dtos/healthCheckDTO.ts
+
 import { Types } from 'mongoose';
 import { LeanHealthCheckDocument } from '../types/leanTypes';
 
@@ -9,13 +9,22 @@ export interface HealthCheckDTO {
   responseTime: number;
   statusCode?: number;
   errorMessage?: string;
-  checkedAt: string; // Formatted date string
+  checkedAt: string;
+  timestamp: number;
+  formattedTime: string;
+  formattedDateTime: string;
 }
 
 export class HealthCheckMapper {
-  /**
-   * Format date to Indian time (IST) in 12-hour format
-   */
+  static formatToChartTime(date: Date): string {
+    return date.toLocaleString('en-US', {
+      hour12: true,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  }
+
   static formatToIndianTime(date: Date): string {
     return date.toLocaleString('en-IN', {
       timeZone: 'Asia/Kolkata',
@@ -29,9 +38,18 @@ export class HealthCheckMapper {
     });
   }
 
-  /**
-   * Map a lean MongoDB document to HealthCheckDTO
-   */
+  static formatToFullDateTime(date: Date): string {
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+  }
+
   static fromLeanDocument(leanDoc: LeanHealthCheckDocument): HealthCheckDTO {
     return {
       id: leanDoc._id.toString(),
@@ -40,14 +58,42 @@ export class HealthCheckMapper {
       responseTime: leanDoc.responseTime,
       statusCode: leanDoc.statusCode,
       errorMessage: leanDoc.errorMessage,
-      checkedAt: this.formatToIndianTime(leanDoc.checkedAt)
+      checkedAt: this.formatToIndianTime(leanDoc.checkedAt),
+      timestamp: leanDoc.checkedAt.getTime(),
+      formattedTime: this.formatToChartTime(leanDoc.checkedAt),
+      formattedDateTime: this.formatToFullDateTime(leanDoc.checkedAt)
     };
   }
 
-  /**
-   * Map an array of lean MongoDB documents to HealthCheckDTO array
-   */
   static fromLeanDocumentList(leanDocs: LeanHealthCheckDocument[]): HealthCheckDTO[] {
-    return leanDocs.map(doc => this.fromLeanDocument(doc));
+    return leanDocs
+      .map(doc => this.fromLeanDocument(doc))
+      .sort((a, b) => a.timestamp - b.timestamp); // Ascending order for charts
   }
+
+
+  static fromLeanDocumentListDescending(leanDocs: LeanHealthCheckDocument[]): HealthCheckDTO[] {
+  return leanDocs
+    .map(doc => this.fromLeanDocument(doc))
+  }
+
+  static fromLeanDocumentListHealthCheckTable(leanDocs: LeanHealthCheckDocument[]): HealthCheckDTO[] {
+  return leanDocs
+    .map(doc => this.fromLeanDocument(doc))
+    .sort((a, b) => b.timestamp - a.timestamp);
+  }
+}
+
+export interface HealthCheckQuery {
+  endpointId: string;
+  status?: string;
+}
+
+export interface EndpointStatsResult {
+  totalChecks: number;
+  successCount: number;
+  failureCount: number;
+  timeoutCount: number;
+  avgResponseTime: number;
+  uptime: number;
 }

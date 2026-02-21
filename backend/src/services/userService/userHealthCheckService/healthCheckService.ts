@@ -1,12 +1,13 @@
 import axios, { AxiosRequestConfig } from 'axios';
 import { EventEmitter } from 'events';
-import { IHealthCheckService, EndpointStatus, ThresholdAlert } from './IHealthCheckService';
-import { IHealthCheckRepository } from '../../../repository/userRepo/healthCheckRepo/IHealthCheckRepo'; 
+import { IHealthCheckService} from './IHealthCheckService';
+import { IHealthCheckRepository } from '../../../repository/userRepo/healthCheckRepo/IHealthCheckRepo';
 import { IApiEndpointRepository } from '../../../repository/userRepo/apiEndpointRepo/IApiEndpointRepo';
 import { IHealthCheck } from '../../../models/healthCheckModel';
 import { IApiEndpoint } from '../../../models/apiEndpointModel';
 import { AppError } from '../../../utils/errorUtil/appError';
 import { HealthCheckDTO, HealthCheckMapper } from '../../../dto/healthCheckDTO';
+import { EndpointStatsResponse, EndpointStatus, PaginatedHealthChecks, ThresholdAlert } from '../../../dto/healthCheckServiceDTO';
 
 export class HealthCheckService extends EventEmitter implements IHealthCheckService {
   private monitoringInterval: NodeJS.Timeout | null = null;
@@ -21,9 +22,6 @@ export class HealthCheckService extends EventEmitter implements IHealthCheckServ
     super();
   }
 
-  /**
-   * Start the monitoring engine
-   */
   startMonitoring(): void {
     if (this.isMonitoring) {
       console.log('Monitoring engine is already running');
@@ -33,18 +31,13 @@ export class HealthCheckService extends EventEmitter implements IHealthCheckServ
     this.isMonitoring = true;
     console.log('Starting health monitoring engine...');
 
-    // Run immediately on start
     this.runMonitoringCycle();
 
-    // Schedule regular checks every 30 seconds
     this.monitoringInterval = setInterval(() => {
       this.runMonitoringCycle();
-    }, 30000); // Check every 30 seconds for endpoints that need checking
+    }, 30000);
   }
 
-  /**
-   * Stop the monitoring engine
-   */
   stopMonitoring(): void {
     if (this.monitoringInterval) {
       clearInterval(this.monitoringInterval);
@@ -54,22 +47,17 @@ export class HealthCheckService extends EventEmitter implements IHealthCheckServ
     console.log('Health monitoring engine stopped');
   }
 
-  /**
-   * Main monitoring cycle - finds endpoints that need checking and checks them
-   */
   private async runMonitoringCycle(): Promise<void> {
     try {
       console.log('Running monitoring cycle...');
-      
-      // Find all active endpoints that need to be checked
+
       const endpoints = await this.getEndpointsNeedingCheck();
-      
+
       console.log(`Found ${endpoints.length} endpoints that need checking`);
 
-      // Check each endpoint (run in parallel but with concurrency limit)
       const concurrencyLimit = 10;
       const chunks = this.chunkArray(endpoints, concurrencyLimit);
-      
+
       for (const chunk of chunks) {
         await Promise.all(chunk.map(endpoint => this.checkEndpoint(endpoint._id.toString())));
       }
@@ -78,36 +66,28 @@ export class HealthCheckService extends EventEmitter implements IHealthCheckServ
     }
   }
 
-  /**
-   * Get all active endpoints that need to be checked based on their interval
-   */
   async getEndpointsNeedingCheck(): Promise<IApiEndpoint[]> {
     const activeEndpoints = await this.endpointRepository.findAll({ isActive: true });
-    
-    const endpointsNeedingCheck = [];
-    
+
+    const endpointsNeedingCheck: IApiEndpoint[] = [];
+
     for (const endpoint of activeEndpoints) {
-      // Skip if already being checked
       if (this.checkInProgress.has(endpoint._id.toString())) {
         continue;
       }
 
-      // Get the latest check for this endpoint
       const latestCheck = await this.healthCheckRepository.findLatestByEndpoint(
         endpoint._id.toString()
       );
 
-      // If never checked, needs check now
       if (!latestCheck) {
         endpointsNeedingCheck.push(endpoint);
         continue;
       }
 
-      // Calculate time since last check
       const timeSinceLastCheck = Date.now() - latestCheck.checkedAt.getTime();
       const intervalMs = endpoint.interval * 1000;
 
-      // If enough time has passed, needs check
       if (timeSinceLastCheck >= intervalMs) {
         endpointsNeedingCheck.push(endpoint);
       }
@@ -116,11 +96,7 @@ export class HealthCheckService extends EventEmitter implements IHealthCheckServ
     return endpointsNeedingCheck;
   }
 
-  /**
-   * Check a single endpoint
-   */
   async checkEndpoint(endpointId: string): Promise<IHealthCheck> {
-    // Prevent concurrent checks of the same endpoint
     if (this.checkInProgress.has(endpointId)) {
       throw new AppError('Check already in progress for this endpoint', 409);
     }
@@ -128,7 +104,6 @@ export class HealthCheckService extends EventEmitter implements IHealthCheckServ
     this.checkInProgress.add(endpointId);
 
     try {
-      // Get endpoint details
       const endpoint = await this.endpointRepository.findById(endpointId);
       if (!endpoint) {
         throw new AppError('Endpoint not found', 404);
@@ -136,74 +111,62 @@ export class HealthCheckService extends EventEmitter implements IHealthCheckServ
 
       console.log(`Checking endpoint: ${endpoint.name} (${endpoint.url})`);
 
-      // Prepare request configuration
       const config: AxiosRequestConfig = {
         method: endpoint.method,
         url: endpoint.url,
         timeout: endpoint.timeout,
         headers: Object.fromEntries(endpoint.headers || new Map()),
-        validateStatus: () => true // Don't throw on any status code
+        validateStatus: () => true,
+        maxRedirects: 5,
+        decompress: true,
       };
 
-      // Add body for POST/PUT requests
       if (endpoint.body && ['POST', 'PUT'].includes(endpoint.method)) {
         config.data = endpoint.body;
-        
-        // Set content-type if not already set
+
         if (!config.headers?.['Content-Type']) {
           config.headers = {
             ...config.headers,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
           };
         }
       }
 
-      // Perform the check
       const startTime = Date.now();
-      let response;
-      
+      let healthCheck: IHealthCheck;
+
       try {
-        response = await axios(config);
-      } catch (error: any) {
-        // Handle network errors or timeouts
-        const healthCheck = await this.saveFailedCheck(
-          endpoint,
-          error.code === 'ECONNABORTED' ? 'timeout' : 'failure',
-          Date.now() - startTime,
-          error.message
+        const response = await axios.request(config);
+        const responseTime = Date.now() - startTime;
+
+        const isSuccess = response.status === endpoint.expectedStatus;
+
+        healthCheck = await this.healthCheckRepository.create({
+          endpointId: endpoint._id,
+          userId: endpoint.userId,
+          status: isSuccess ? 'success' : 'failure',
+          responseTime,
+          statusCode: response.status,
+          checkedAt: new Date(),
+          responseHeaders: new Map(Object.entries(response.headers || {})),
+          responseBody: !isSuccess
+            ? JSON.stringify(response.data).substring(0, 1000)
+            : undefined,
+        } as IHealthCheck);
+
+        console.log(
+          `Check completed for ${endpoint.name}: ${isSuccess ? 'SUCCESS' : 'FAILURE'} (${responseTime}ms) [Status: ${response.status}]`
         );
-        
-        await this.evaluateEndpointStatus(endpoint, healthCheck);
-        
-        // Emit check completed event for failed check
-        this.emit('check-completed', healthCheck);
-        
-        return healthCheck;
+      } catch (requestError: unknown) {
+        // requestError is unknown — handleRequestError narrows it internally
+        const responseTime = Date.now() - startTime;
+        healthCheck = await this.handleRequestError(endpoint, requestError, responseTime);
+        console.log(
+          `Check failed for ${endpoint.name}: ${healthCheck.status.toUpperCase()} (${responseTime}ms) [Status: ${healthCheck.statusCode}]`
+        );
       }
 
-      const responseTime = Date.now() - startTime;
-      
-      // Determine if successful based on expected status
-      const isSuccess = response.status === endpoint.expectedStatus;
-      
-      // Save the check result
-      const healthCheck = await this.healthCheckRepository.create({
-        endpointId: endpoint._id,
-        userId: endpoint.userId,
-        status: isSuccess ? 'success' : 'failure',
-        responseTime,
-        statusCode: response.status,
-        checkedAt: new Date(),
-        responseHeaders: new Map(Object.entries(response.headers || {})),
-        responseBody: isSuccess ? undefined : JSON.stringify(response.data).substring(0, 1000) // Limit body size
-      } as IHealthCheck);
-
-      console.log(`Check completed for ${endpoint.name}: ${isSuccess ? 'SUCCESS' : 'FAILURE'} (${responseTime}ms)`);
-
-      // Evaluate endpoint status and emit alerts if needed
       await this.evaluateEndpointStatus(endpoint, healthCheck);
-      
-      // Emit check completed event
       this.emit('check-completed', healthCheck);
 
       return healthCheck;
@@ -212,105 +175,134 @@ export class HealthCheckService extends EventEmitter implements IHealthCheckServ
     }
   }
 
-  /**
-   * Save a failed check result
-   */
-  private async saveFailedCheck(
+  private async handleRequestError(
     endpoint: IApiEndpoint,
-    status: 'timeout' | 'failure',
-    responseTime: number,
-    errorMessage: string
+    error: unknown,         
+    responseTime: number
   ): Promise<IHealthCheck> {
+    let status: 'timeout' | 'failure';
+    let statusCode: number;
+    let errorMessage: string;
+
+    if (axios.isAxiosError(error)) {
+      if (error.code === 'ECONNABORTED') {
+        status = 'timeout';
+        statusCode = 408;
+        errorMessage = `Request timeout after ${endpoint.timeout}ms`;
+      } else if (error.response) {
+        status = 'failure';
+        statusCode = error.response.status;
+        errorMessage = `HTTP ${error.response.status}: ${error.response.statusText || 'Server error'}`;
+      } else if (error.request) {
+        status = 'failure';
+        statusCode = 0;
+        errorMessage = 'No response received from server. Check if the server is reachable.';
+      } else {
+        status = 'failure';
+        statusCode = 0;
+        errorMessage = error.message || 'Request setup failed';
+      }
+    } else if (error instanceof Error) {
+      // Non-axios Error subclass
+      status = 'failure';
+      statusCode = 0;
+      errorMessage = error.message;
+    } else {
+      // Truly unknown — last resort
+      status = 'failure';
+      statusCode = 0;
+      errorMessage = 'Unknown error occurred';
+    }
+
     return this.healthCheckRepository.create({
       endpointId: endpoint._id,
       userId: endpoint.userId,
       status,
       responseTime,
+      statusCode,
       errorMessage,
-      checkedAt: new Date()
+      checkedAt: new Date(),
     } as IHealthCheck);
   }
 
-  /**
-   * Evaluate endpoint status and check thresholds
-   */
   private async evaluateEndpointStatus(
     endpoint: IApiEndpoint,
     healthCheck: IHealthCheck
   ): Promise<void> {
     const endpointId = endpoint._id.toString();
-    
-    // Update failure count
+
     if (healthCheck.status === 'success') {
       this.failureCounts.delete(endpointId);
     } else {
       const currentFailures = this.failureCounts.get(endpointId) || 0;
       this.failureCounts.set(endpointId, currentFailures + 1);
-      
-      // Check if threshold exceeded
       await this.checkThresholds(endpointId);
     }
   }
 
-  /**
-   * Check if an endpoint has exceeded its failure threshold
-   */
   async checkThresholds(endpointId: string): Promise<boolean> {
     const endpoint = await this.endpointRepository.findById(endpointId);
     if (!endpoint) return false;
 
     const failureCount = this.failureCounts.get(endpointId) || 0;
-    
+
     if (failureCount >= endpoint.thresholds.failureThreshold) {
-      // Create alert object
       const alert: ThresholdAlert = {
         endpointId,
         endpointName: endpoint.name,
         failureCount,
         threshold: endpoint.thresholds.failureThreshold,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
-      
-      // Emit alert event
+
       this.emit('threshold-exceeded', alert);
-      
-      console.warn(`ALERT: Endpoint ${endpoint.name} has exceeded failure threshold (${failureCount}/${endpoint.thresholds.failureThreshold})`);
+
+      console.warn(
+        `ALERT: Endpoint ${endpoint.name} has exceeded failure threshold (${failureCount}/${endpoint.thresholds.failureThreshold})`
+      );
       return true;
     }
-    
+
     return false;
   }
 
-  /**
-   * Get check history for an endpoint
-   */
   async getEndpointHistory(endpointId: string, limit: number = 100): Promise<HealthCheckDTO[]> {
     const history = await this.healthCheckRepository.findByEndpoint(endpointId, limit);
-    return HealthCheckMapper.fromLeanDocumentList(history)
+    return HealthCheckMapper.fromLeanDocumentList(history);
   }
 
-  /**
-   * Get statistics for an endpoint
-   */
-  async getEndpointStats(endpointId: string, hours: number = 24): Promise<any> {
+  async getEndpointStats(
+    endpointId: string,
+    hours: number = 24
+  ): Promise<EndpointStatsResponse> {
     const endpoint = await this.endpointRepository.findById(endpointId);
     if (!endpoint) {
       throw new AppError('Endpoint not found', 404);
     }
 
     const stats = await this.healthCheckRepository.getEndpointStats(endpointId, hours);
-    
+
     return {
       ...stats,
       endpointName: endpoint.name,
       endpointUrl: endpoint.url,
-      period: `${hours} hours`
+      period: `${hours} hours`,
     };
   }
 
-  /**
-   * Get current status for all of a user's endpoints
-   */
+  async getRecentHealthChecks(endpointId: string, limit: number = 10): Promise<HealthCheckDTO[]> {
+    try {
+      const recentChecks = await this.healthCheckRepository.getRecentHealthChecks(
+        endpointId,
+        limit
+      );
+      return HealthCheckMapper.fromLeanDocumentListDescending(recentChecks);
+    } catch (error) {
+      console.error('Error getting recent health checks:', error);
+      throw new AppError('Failed to fetch recent health checks', 500);
+    }
+  }
+
   async getUserEndpointsStatus(userId: string): Promise<EndpointStatus[]> {
     const endpoints = await this.endpointRepository.findByUser(userId);
     const statuses: EndpointStatus[] = [];
@@ -319,20 +311,31 @@ export class HealthCheckService extends EventEmitter implements IHealthCheckServ
       const latestCheck = await this.healthCheckRepository.findLatestByEndpoint(
         endpoint._id.toString()
       );
-      
+
       const stats = await this.healthCheckRepository.getEndpointStats(
         endpoint._id.toString(),
         24
       );
 
       const failureCount = this.failureCounts.get(endpoint._id.toString()) || 0;
-      
-      let status: 'up' | 'down' | 'degraded' = 'up';
-      
-      if (failureCount >= endpoint.thresholds.failureThreshold) {
-        status = 'down';
-      } else if (failureCount > 0) {
-        status = 'degraded';
+
+      let status: 'up' | 'down' | 'degraded' | 'inactive' = 'inactive';
+
+      if (endpoint.isActive) {
+        if (failureCount >= endpoint.thresholds.failureThreshold) {
+          status = 'down';
+        } else if (failureCount > 0) {
+          status = 'degraded';
+        } else if (latestCheck) {
+          status =
+            latestCheck.status === 'success'
+              ? 'up'
+              : latestCheck.status === 'timeout'
+              ? 'degraded'
+              : 'down';
+        } else {
+          status = 'up';
+        }
       }
 
       statuses.push({
@@ -343,16 +346,49 @@ export class HealthCheckService extends EventEmitter implements IHealthCheckServ
         lastChecked: latestCheck?.checkedAt || new Date(0),
         lastResponseTime: latestCheck?.responseTime || 0,
         uptime: stats.uptime,
-        currentFailureCount: failureCount
+        currentFailureCount: failureCount,
+        interval: endpoint.interval,
+        totalChecks: stats.totalChecks,
+        isActive: endpoint.isActive,
       });
     }
 
     return statuses;
   }
 
-  /**
-   * Utility: Split array into chunks for concurrency control
-   */
+  async getAllHealthChecks(
+    endpointId: string,
+    page: number = 1,
+    limit: number = 20,
+    status: string = 'all'
+  ): Promise<PaginatedHealthChecks> {
+    try {
+      const endpoint = await this.endpointRepository.findById(endpointId);
+      if (!endpoint) {
+        throw new AppError('Endpoint not found', 404);
+      }
+
+      const result = await this.healthCheckRepository.getAllHealthChecks(
+        endpointId,
+        page,
+        limit,
+        status !== 'all' ? status : undefined
+      );
+
+      return {
+        data: HealthCheckMapper.fromLeanDocumentListHealthCheckTable(result.data),
+        total: result.total,
+        page: result.page,
+        totalPages: result.totalPages,
+        limit,
+      };
+    } catch (error) {
+      console.error('Error getting all health checks:', error);
+      if (error instanceof AppError) throw error;
+      throw new AppError('Failed to fetch health checks', 500);
+    }
+  }
+
   private chunkArray<T>(array: T[], chunkSize: number): T[][] {
     const chunks: T[][] = [];
     for (let i = 0; i < array.length; i += chunkSize) {

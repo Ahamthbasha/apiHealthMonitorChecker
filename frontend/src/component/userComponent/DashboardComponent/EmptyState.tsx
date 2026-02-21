@@ -1,10 +1,7 @@
-// components/dashboard/EmptyState.tsx
+
 import React from 'react';
 import { Activity, Plus } from 'lucide-react';
-
-interface EmptyStateProps {
-  onAddNew: () => void;
-}
+import type { EmptyStateProps } from './interface/IEmptyState';
 
 const EmptyState: React.FC<EmptyStateProps> = ({ onAddNew }) => (
   <div className="h-full flex items-center justify-center min-h-[400px]">

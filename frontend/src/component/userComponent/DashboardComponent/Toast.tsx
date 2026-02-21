@@ -1,11 +1,8 @@
 
 import React, { useEffect } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react';
-import {type ToastItem } from '../../../types/dashboard';
-
-interface ToastProps extends ToastItem {
-  onClose: () => void;
-}
+import {type ToastItem } from '../../../types/healthCheck';
+import type { ToastProps } from './interface/IToast';
 
 const Toast: React.FC<ToastProps> = ({ message, type, onClose }) => {
   useEffect(() => {

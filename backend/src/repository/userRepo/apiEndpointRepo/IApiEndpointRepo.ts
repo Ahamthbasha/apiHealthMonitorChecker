@@ -8,4 +8,5 @@ export interface IApiEndpointRepository extends IGenericRepository<IApiEndpoint>
   updateInterval(id: string, interval: number): Promise<IApiEndpoint | null>;
   toggleActive(id: string, userId: string): Promise<IApiEndpoint | null>;
   countByUser(userId: string): Promise<number>;
+  hardDelete(id: string): Promise<boolean>
 }

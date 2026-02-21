@@ -9,6 +9,7 @@ import InputField from "../../../component/common/Inputfield";
 import PasswordField from "../../../component/common/Passwordfield";
 import { login } from "../../../api/authAction/userAuth";
 import { setUser } from "../../../redux/slices/userSlice";
+import type { ErrorResponse } from "./interface/ILogin";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email"),
@@ -17,16 +18,6 @@ const loginSchema = z.object({
 
 type LoginForm = z.infer<typeof loginSchema>;
 
-interface ValidationError {
-  msg: string;
-  path: string;
-}
-
-interface ErrorResponse {
-  success: boolean;
-  message?: string;
-  errors?: ValidationError[];
-}
 
 export default function Login() {
   const dispatch = useDispatch();

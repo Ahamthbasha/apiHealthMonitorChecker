@@ -1,37 +1,16 @@
-// src/pages/user/endpoint/EndpointForm.tsx
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Save, X, Plus, Trash2, Globe, Clock, Zap, Shield } from 'lucide-react';
 import { createEndpoint, getEndpointById, updateEndpoint } from '../../../api/userAction/userAction';
 import type { CreateEndpointDTO, UpdateEndpointDTO } from '../../../types/interface/apiInterface';
+import type { ApiError, HeaderField, ValidationError } from './interface/IEndpointForm';
 
-interface HeaderField {
-  key: string;
-  value: string;
-}
-
-interface ValidationError {
-  msg: string;
-  path: string;
-}
-
-interface ApiError {
-  response?: {
-    data?: {
-      errors?: ValidationError[];
-      message?: string;
-    };
-  };
-  message?: string;
-}
 
 function isApiError(err: unknown): err is ApiError {
   return typeof err === 'object' && err !== null && 'response' in err;
 }
 
-// ---------------------------------------------------------------------------
-// LoadingSpinner
-// ---------------------------------------------------------------------------
 const LoadingSpinner: React.FC<{ size?: 'sm' | 'md' | 'lg' }> = ({ size = 'md' }) => {
   const sizeClasses = { sm: 'w-4 h-4', md: 'w-8 h-8', lg: 'w-12 h-12' };
   return (
@@ -41,9 +20,6 @@ const LoadingSpinner: React.FC<{ size?: 'sm' | 'md' | 'lg' }> = ({ size = 'md' }
   );
 };
 
-// ---------------------------------------------------------------------------
-// Alert
-// ---------------------------------------------------------------------------
 const Alert: React.FC<{
   type: 'error' | 'success' | 'info' | 'warning';
   message: string;
@@ -80,9 +56,6 @@ const Alert: React.FC<{
   );
 };
 
-// ---------------------------------------------------------------------------
-// Section wrapper
-// ---------------------------------------------------------------------------
 const Section: React.FC<{
   icon: React.ReactNode;
   title: string;
@@ -97,18 +70,12 @@ const Section: React.FC<{
   </div>
 );
 
-// ---------------------------------------------------------------------------
-// Shared input classes
-// ---------------------------------------------------------------------------
 const inputCls =
   'w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-200 text-sm placeholder-gray-600 focus:outline-none focus:border-green-500 transition-colors';
 
 const labelCls = 'block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider';
 const hintCls = 'mt-1 text-xs text-gray-600';
 
-// ---------------------------------------------------------------------------
-// EndpointForm
-// ---------------------------------------------------------------------------
 const EndpointForm: React.FC = () => {
   const { endpointId } = useParams<{ endpointId: string }>();
   const navigate = useNavigate();

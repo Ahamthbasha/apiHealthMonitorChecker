@@ -1,4 +1,4 @@
-// src/types/interface/apiInterface.ts
+
 export interface ApiEndpoint {
   _id: string;
   name: string;

@@ -1,11 +1,9 @@
-// component/common/Passwordfield.tsx
-import { forwardRef, useState, type InputHTMLAttributes } from "react";
-import { Eye, EyeOff } from "lucide-react";
 
-interface PasswordFieldProps extends InputHTMLAttributes<HTMLInputElement> {
-  label: string;
-  error?: string;
-}
+import { forwardRef, useState, } from "react";
+import { Eye, EyeOff } from "lucide-react";
+import type { PasswordFieldProps } from "./interface/IPasswordfield";
+
+
 
 const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
   ({ label, error, className, id, ...props }, ref) => {

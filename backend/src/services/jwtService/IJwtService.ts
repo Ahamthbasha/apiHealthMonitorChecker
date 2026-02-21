@@ -12,7 +12,7 @@ export interface ITokenPair {
 export interface IRegistrationPayload {
   name: string;
   email: string;
-  password: string; // Hashed password
+  password: string;
   timestamp: number;
 }
 

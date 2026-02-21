@@ -1,4 +1,4 @@
-// src/validationMiddleware/apiEndpointValidator.ts
+
 import { body, param } from 'express-validator';
 import { validateRequest } from './registerLoginValidator';
 
@@ -96,7 +96,7 @@ export const updateEndpointValidation = [
 ];
 
 export const endpointIdValidation = [
-  param('endpointId') // Changed from 'id' to 'endpointId'
+  param('endpointId')
     .isMongoId()
     .withMessage('Invalid endpoint ID'),
   validateRequest

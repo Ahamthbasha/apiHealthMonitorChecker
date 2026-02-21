@@ -41,4 +41,9 @@ export class ApiEndpointRepository extends GenericRepository<IApiEndpoint> imple
   async countByUser(userId: string): Promise<number> {
     return this.count({ userId });
   }
+
+  async hardDelete(id: string): Promise<boolean> {
+    const result = await this.model.findByIdAndDelete(id).exec();
+    return result !== null;
+  }
 }

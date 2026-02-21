@@ -7,6 +7,7 @@ import { toast } from "react-toastify";
 import { type AxiosError } from "axios";
 import InputField from "../../../component/common/Inputfield";
 import { verifyOTP, resendOTP } from "../../../api/authAction/userAuth";
+import type { ErrorResponse, LocationState, ResendOTPResponse } from "./interface/IOTPVerification";
 
 const otpSchema = z.object({
   otp: z
@@ -18,22 +19,6 @@ const otpSchema = z.object({
 
 type OTPForm = z.infer<typeof otpSchema>;
 
-interface LocationState {
-  email: string;
-  expiresIn?: number;
-}
-
-interface ErrorResponse {
-  success: boolean;
-  message?: string;
-  data?: { expiresIn?: number };
-}
-
-interface ResendOTPResponse {
-  success: boolean;
-  message?: string;
-  data?: { expiresIn?: number };
-}
 
 function maskEmail(email: string): string {
   if (!email) return "";

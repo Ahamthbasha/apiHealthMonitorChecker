@@ -8,6 +8,7 @@ import { useState } from "react";
 import InputField from "../../../component/common/Inputfield";
 import PasswordField from "../../../component/common/Passwordfield";
 import { registerUser } from "../../../api/authAction/userAuth";
+import type { ErrorResponse } from "./interface/IRegister";
 
 const registerSchema = z
   .object({
@@ -28,11 +29,6 @@ const registerSchema = z
 
 type RegisterForm = z.infer<typeof registerSchema>;
 
-interface ErrorResponse {
-  success: boolean;
-  message?: string;
-  errors?: Array<{ msg: string; path: string }>;
-}
 
 export default function Register() {
   const navigate = useNavigate();
