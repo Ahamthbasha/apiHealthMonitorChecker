@@ -16,8 +16,6 @@ export interface IWebSocketService {
     }>;
   };
 
-  refreshUserTokens(userId: string): Promise<boolean>;
-
   cleanup(): void;
 }
 

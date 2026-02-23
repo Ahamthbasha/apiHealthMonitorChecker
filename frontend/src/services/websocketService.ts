@@ -1,5 +1,6 @@
 import { io, Socket } from "socket.io-client";
 import { API_BASE_URL } from "../config/config";
+import axios from "axios";
 import type { HealthCheckDTO } from "../types/interface/healthCheckInterface";
 
 export interface HealthCheckData {
@@ -14,17 +15,18 @@ export interface HealthCheckData {
   formattedTime: string;
   formattedDateTime: string;
 }
+
 export interface EndpointStatus {
   endpointId: string;
   name: string;
   url: string;
-  status: "up" | "down" | "degraded";
+  status: "up" | "down" | "degraded" | "inactive";
   lastChecked: string;
   lastResponseTime: number;
   uptime: number;
   currentFailureCount: number;
-  interval: number; // Added
-  totalChecks: number; // Added
+  interval: number;
+  totalChecks: number;
   isActive: boolean;
 }
 
@@ -116,6 +118,10 @@ export interface ConnectionStatusData {
   reason?: string;
 }
 
+export interface TokenExpiringData {
+  message: string;
+}
+
 // Define event payload types
 export type EventPayloadMap = {
   "connection-status": ConnectionStatusData;
@@ -125,8 +131,10 @@ export type EventPayloadMap = {
   "live-stats": LiveStatsData;
   "endpoint-latest-data": EndpointLatestData;
   "endpoint-history": EndpointHistoryData;
+  "token-expiring": TokenExpiringData;
+  "token-refresh-acknowledged": Record<string, never>;
   error: ErrorData;
-  "endpoint-deleted": { endpointId: string; timestamp: string }; // Add this event
+  "endpoint-deleted": { endpointId: string; timestamp: string };
 };
 
 // Define event types with proper interfaces
@@ -145,18 +153,17 @@ class WebSocketService {
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
   private connectionPromise: Promise<void> | null = null;
-  private subscribedEndpoints: Set<string> = new Set(); // Track subscribed endpoints
+  private subscribedEndpoints: Set<string> = new Set();
+  private refreshInProgress = false;
 
   /**
-   * Connect to WebSocket server - no token needed as it's in cookies
+   * Connect to WebSocket server - cookies are sent automatically
    */
   connect(): Promise<void> {
-    // If already connecting, return existing promise
     if (this.connectionPromise) {
       return this.connectionPromise;
     }
 
-    // If already connected, resolve immediately
     if (this.socket?.connected) {
       return Promise.resolve();
     }
@@ -165,12 +172,11 @@ class WebSocketService {
       try {
         console.log("🔌 Connecting to WebSocket server...", API_BASE_URL);
 
-        // Ensure URL has proper format for WebSocket
         const wsUrl = API_BASE_URL.replace(/^http/, "ws");
 
         this.socket = io(wsUrl, {
           transports: ["websocket"],
-          withCredentials: true, // Important: This sends cookies with the request
+          withCredentials: true, // This sends cookies automatically
           reconnection: true,
           reconnectionAttempts: this.maxReconnectAttempts,
           reconnectionDelay: this.reconnectDelay,
@@ -230,7 +236,7 @@ class WebSocketService {
       }
     });
 
-    // Authentication error (401)
+    // Authentication error
     this.socket.on("connect_error", (error: Error) => {
       if (
         error.message === "Authentication required" ||
@@ -280,7 +286,18 @@ class WebSocketService {
       });
     });
 
-    // Handle custom events with proper typing and error handling
+    // Handle token expiring event
+    this.socket.on("token-expiring", async (data: TokenExpiringData) => {
+      console.log("⚠️ Token expiring soon:", data.message);
+      await this.refreshTokenViaHttp();
+    });
+
+    // Handle token refresh acknowledgment
+    this.socket.on("token-refresh-acknowledged", () => {
+      console.log("✅ Token refresh acknowledged by server");
+    });
+
+    // Handle custom events
     this.socket.on("initial-data", (data: InitialData) => {
       try {
         console.log(
@@ -296,7 +313,6 @@ class WebSocketService {
 
     this.socket.on("endpoint-updated", (data: EndpointUpdatedData) => {
       try {
-        // Check if we're still subscribed to this endpoint
         if (this.subscribedEndpoints.has(data.endpointId)) {
           console.log(
             `Endpoint ${data.endpointId} updated with status:`,
@@ -342,13 +358,11 @@ class WebSocketService {
       }
     });
 
-    // Handle endpoint deletion from server
     this.socket.on(
       "endpoint-deleted",
       (data: { endpointId: string; timestamp: string }) => {
         try {
           console.log(`Endpoint ${data.endpointId} deleted from server`);
-          // Remove from subscribed endpoints
           this.subscribedEndpoints.delete(data.endpointId);
           this.emit("endpoint-deleted", data);
         } catch (error) {
@@ -361,6 +375,62 @@ class WebSocketService {
       console.error("WebSocket error:", error);
       this.emit("error", error);
     });
+  }
+
+  /**
+   * Refresh token via HTTP endpoint - this will update cookies automatically
+   */
+  private async refreshTokenViaHttp(): Promise<boolean> {
+    // Prevent multiple simultaneous refresh attempts
+    if (this.refreshInProgress) {
+      console.log("Token refresh already in progress");
+      return false;
+    }
+
+    this.refreshInProgress = true;
+
+    try {
+      console.log("🔄 Refreshing token via HTTP...");
+      
+      // Call any protected endpoint - the auth middleware will refresh the token
+      // and set new cookies automatically
+      const response = await axios.get(`${API_BASE_URL}/api/user/profile`, {
+        withCredentials: true,
+        timeout: 10000
+      });
+
+      if (response.status === 200) {
+        console.log("✅ Token refreshed successfully via HTTP");
+        
+        // Notify server that we've refreshed
+        if (this.socket?.connected) {
+          this.socket.emit("request-token-refresh");
+        }
+        
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error("❌ Failed to refresh token:", error);
+      
+      // If refresh fails, redirect to login
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        console.log("Token refresh failed - redirecting to login");
+        window.location.href = "/login";
+      }
+      
+      return false;
+    } finally {
+      this.refreshInProgress = false;
+    }
+  }
+
+  /**
+   * Manually request token refresh
+   */
+  public async requestTokenRefresh(): Promise<boolean> {
+    return this.refreshTokenViaHttp();
   }
 
   /**
@@ -415,6 +485,7 @@ class WebSocketService {
     };
     this.listeners.get(event)!.add(wrappedCallback as EventCallback<K>);
   }
+
   off<K extends keyof EventMap>(event: K, callback: EventMap[K]): void {
     if (this.listeners.has(event)) {
       this.listeners.get(event)!.delete(callback as EventCallback<K>);
@@ -436,7 +507,6 @@ class WebSocketService {
     if (this.listeners.has(event)) {
       this.listeners.get(event)!.forEach((callback) => {
         try {
-          // Type-safe callback execution
           (callback as (data: EventPayloadMap[K]) => void)(data);
         } catch (error) {
           console.error(`Error in ${event} listener:`, error);
@@ -448,6 +518,7 @@ class WebSocketService {
   isConnected(): boolean {
     return this.socket?.connected || false;
   }
+
   getSocketId(): string | null {
     return this.socket?.id || null;
   }
@@ -462,6 +533,7 @@ class WebSocketService {
     this.subscribedEndpoints.clear();
     this.listeners.clear();
     this.connectionPromise = null;
+    this.refreshInProgress = false;
   }
 
   reconnect(): Promise<void> {

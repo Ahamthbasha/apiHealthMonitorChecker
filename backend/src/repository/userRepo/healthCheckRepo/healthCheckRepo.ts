@@ -5,8 +5,6 @@ import { GenericRepository } from '../../genericRepo/genericRepo';
 import { IHealthCheckRepository } from './IHealthCheckRepo';
 import { EndpointStatsResult, HealthCheckQuery } from '../../../dto/healthCheckDTO';
 
-
-
 export class HealthCheckRepository
   extends GenericRepository<IHealthCheck>
   implements IHealthCheckRepository

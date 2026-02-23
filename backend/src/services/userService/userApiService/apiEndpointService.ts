@@ -1,6 +1,6 @@
 import { IApiEndpointRepository } from '../../../repository/userRepo/apiEndpointRepo/IApiEndpointRepo';
 import { IApiEndpointService} from './IApiEndpointService';
-import { IApiEndpoint, IApiEndpointData } from '../../../models/apiEndpointModel';
+import { IApiEndpoint } from '../../../models/apiEndpointModel';
 import { AppError } from '../../../utils/errorUtil/appError';
 import { IHealthCheckRepository } from '../../../repository/userRepo/healthCheckRepo/IHealthCheckRepo';
 import { IWebSocketService } from '../../websocketService/IWebSocketService';

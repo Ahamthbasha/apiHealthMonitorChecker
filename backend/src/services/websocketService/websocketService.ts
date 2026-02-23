@@ -3,11 +3,15 @@ import { Server as HttpServer } from 'http';
 import { IHealthCheckService } from '../userService/userHealthCheckService/IHealthCheckService';
 import { IApiEndpointRepository } from '../../repository/userRepo/apiEndpointRepo/IApiEndpointRepo';
 import { IHealthCheck } from '../../models/healthCheckModel';
-import { IJwtService } from '../jwtService/IJwtService';
+import { IJwtService, IJwtPayload } from '../jwtService/IJwtService';
 import { HealthCheckDTO } from '../../dto/healthCheckDTO';
-import { ConnectedUser, EndpointStatus, IWebSocketService, LiveMetrics, TokenRefreshResponse } from './IWebSocketService';
+import { ConnectedUser, EndpointStatus, IWebSocketService, LiveMetrics, } from './IWebSocketService';
 import { ThresholdAlert } from '../../dto/healthCheckServiceDTO';
 
+interface JwtPayloadWithExp extends IJwtPayload {
+  exp?: number;
+  iat?: number;
+}
 
 export class WebSocketService implements IWebSocketService {
   private io: Server;
@@ -44,13 +48,15 @@ export class WebSocketService implements IWebSocketService {
     this.setupHealthCheckListeners();
     this.startBroadcastInterval();
   }
+
   private setupMiddleware() {
     this.io.use(async (socket, next) => {
       try {
         const { accessToken, refreshToken } = this.extractTokens(socket);
 
-        if (!accessToken) {
-          console.log('No access token found in handshake');
+        // Don't require accessToken - let the auth flow handle it
+        if (!accessToken && !refreshToken) {
+          console.log('No tokens found in handshake');
           return next(new Error('Authentication required'));
         }
 
@@ -63,8 +69,9 @@ export class WebSocketService implements IWebSocketService {
         socket.data.userId = authResult.userId;
         socket.data.tokenType = authResult.tokenType;
         
-        if (authResult.newTokens) {
-          socket.emit('tokens-refreshed', authResult.newTokens);
+        // If token is expiring soon, notify client to refresh
+        if (authResult.tokenExpiring) {
+          socket.emit('token-expiring', { message: 'Token expiring soon' });
         }
 
         console.log(`User ${authResult.userId} authenticated with ${authResult.tokenType} token`);
@@ -76,7 +83,6 @@ export class WebSocketService implements IWebSocketService {
     });
   }
 
-  
   private extractTokens(socket: Socket): { accessToken: string | null; refreshToken: string | null } {
     let accessToken: string | null = null;
     let refreshToken: string | null = null;
@@ -101,6 +107,7 @@ export class WebSocketService implements IWebSocketService {
 
     return { accessToken, refreshToken };
   }
+
   private parseCookies(cookieString: string): Record<string, string> {
     return cookieString.split(';').reduce((acc, cookie) => {
       const [key, value] = cookie.trim().split('=');
@@ -110,55 +117,70 @@ export class WebSocketService implements IWebSocketService {
   }
 
   private async authenticateWithTokens(
-    accessToken: string, 
+    accessToken: string | null, 
     refreshToken: string | null
   ): Promise<{
     authenticated: boolean;
     userId?: string;
     tokenType?: 'access' | 'refresh';
-    newTokens?: TokenRefreshResponse;
+    tokenExpiring?: boolean;
     error?: string;
   }> {
-    try {
-      const decoded = await this.jwtService.verifyAccessToken(accessToken);
-      return {
-        authenticated: true,
-        userId: decoded.userId,
-        tokenType: 'access'
-      };
-    } catch (accessError) {
-      console.log('Access token verification failed, trying refresh token...');
-      
-      if (refreshToken) {
-        try {
-          const decoded = await this.jwtService.verifyRefreshToken(refreshToken);
-          
-          const newTokens = this.jwtService.generateTokenPair({
-            userId: decoded.userId,
-            email: decoded.email,
-            role: decoded.role
-          });
-          
-          return {
-            authenticated: true,
-            userId: decoded.userId,
-            tokenType: 'refresh',
-            newTokens
-          };
-        } catch (refreshError) {
-          console.error('Refresh token verification failed:', refreshError);
-          return {
-            authenticated: false,
-            error: 'Invalid refresh token'
-          };
-        }
+    // Try access token first
+    if (accessToken) {
+      try {
+        const decoded = await this.jwtService.verifyAccessToken(accessToken) as JwtPayloadWithExp;
+        
+        // Check if token is expiring soon (within 2 minutes)
+        const expiringSoon = this.isTokenExpiringSoon(decoded.exp);
+        
+        return {
+          authenticated: true,
+          userId: decoded.userId,
+          tokenType: 'access',
+          tokenExpiring: expiringSoon
+        };
+      } catch (accessError) {
+        console.log('Access token expired, checking refresh token...');
+        // Continue to refresh token check
       }
-      
-      return {
-        authenticated: false,
-        error: 'Invalid or expired access token'
-      };
     }
+
+    // Check refresh token validity
+    if (refreshToken) {
+      try {
+        const decoded = await this.jwtService.verifyRefreshToken(refreshToken) as JwtPayloadWithExp;
+        
+        // Refresh token is valid - client can use it to get new access token via HTTP
+        return {
+          authenticated: true,
+          userId: decoded.userId,
+          tokenType: 'refresh',
+          tokenExpiring: true // Signal that access token needs refresh
+        };
+      } catch (refreshError) {
+        console.error('Refresh token invalid:', refreshError);
+        return {
+          authenticated: false,
+          error: 'Invalid refresh token'
+        };
+      }
+    }
+    
+    return {
+      authenticated: false,
+      error: 'No valid tokens'
+    };
+  }
+
+  private isTokenExpiringSoon(expTimestamp?: number): boolean {
+    if (!expTimestamp) return false;
+    
+    const now = Math.floor(Date.now() / 1000);
+    const timeUntilExpiry = expTimestamp - now;
+    
+    // Return true if token expires in less than 2 minutes (120 seconds)
+    return timeUntilExpiry < 120;
   }
 
   private setupEventHandlers() {
@@ -172,11 +194,16 @@ export class WebSocketService implements IWebSocketService {
         socketId: socket.id,
         userId,
         subscribedEndpoints: new Set(),
-        tokenType
+        tokenType,
+        connectedAt: new Date()
       });
 
-      socket.on('update-tokens', (tokens: { accessToken: string; refreshToken: string }) => {
-        console.log(`User ${userId} updated tokens`);
+      // Listen for token refresh requests from client
+      socket.on('request-token-refresh', async () => {
+        console.log(`Token refresh requested for user ${userId}`);
+        // Client will handle the actual refresh via HTTP endpoint
+        // Just acknowledge the request
+        socket.emit('token-refresh-acknowledged');
       });
 
       socket.on('subscribe-endpoint', (endpointId: string) => {
@@ -247,23 +274,25 @@ export class WebSocketService implements IWebSocketService {
       if (subscribers.length > 0) {
         console.log(`Broadcasting update for endpoint ${endpointId} to ${subscribers.length} subscribers`);
       }
+      
       const checkedAtDate = new Date(result.checkedAt);
-    const formattedTime = checkedAtDate.toLocaleTimeString("en-US", {
-      hour12: true,
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit"
-    });
-    
-    const formattedDateTime = checkedAtDate.toLocaleString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: true,
-    });
+      const formattedTime = checkedAtDate.toLocaleTimeString("en-US", {
+        hour12: true,
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+      
+      const formattedDateTime = checkedAtDate.toLocaleString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+      });
+
       const updateData = {
         endpointId,
         check: {
@@ -274,8 +303,8 @@ export class WebSocketService implements IWebSocketService {
           errorMessage: result.errorMessage,
           checkedAt: result.checkedAt,
           formattedTime: formattedTime,
-        formattedDateTime: formattedDateTime,
-        timestamp: checkedAtDate.getTime()
+          formattedDateTime: formattedDateTime,
+          timestamp: checkedAtDate.getTime()
         },
         timestamp: new Date()
       };
@@ -314,46 +343,45 @@ export class WebSocketService implements IWebSocketService {
   }
 
   private async sendInitialData(socket: Socket, userId: string) {
-  try {
-    console.log(`Sending initial data to user ${userId}`);
-    
-    const endpoints = await this.endpointRepository.findByUser(userId);
-    const statuses = await this.healthCheckService.getUserEndpointsStatus(userId);
-    
-    // Add isActive to statuses
-    const enrichedStatuses = statuses.map(status => ({
-      ...status,
-      isActive: endpoints.find(e => e._id.toString() === status.endpointId)?.isActive || false
-    }));
-    
-    const recentChecks: Record<string, HealthCheckDTO[]> = {};
-    await Promise.all(endpoints.map(async (endpoint) => {
-      const history = await this.healthCheckService.getEndpointHistory(
-        endpoint._id.toString(),
-        20
-      );
-      recentChecks[endpoint._id.toString()] = history;
-    }));
+    try {
+      console.log(`Sending initial data to user ${userId}`);
+      
+      const endpoints = await this.endpointRepository.findByUser(userId);
+      const statuses = await this.healthCheckService.getUserEndpointsStatus(userId);
+      
+      const enrichedStatuses = statuses.map(status => ({
+        ...status,
+        isActive: endpoints.find(e => e._id.toString() === status.endpointId)?.isActive || false
+      }));
+      
+      const recentChecks: Record<string, HealthCheckDTO[]> = {};
+      await Promise.all(endpoints.map(async (endpoint) => {
+        const history = await this.healthCheckService.getEndpointHistory(
+          endpoint._id.toString(),
+          20
+        );
+        recentChecks[endpoint._id.toString()] = history;
+      }));
 
-    const metrics = this.calculateMetrics(enrichedStatuses);
+      const metrics = this.calculateMetrics(enrichedStatuses);
 
-    socket.emit('initial-data', {
-      endpoints,
-      statuses: enrichedStatuses,
-      recentChecks,
-      metrics,
-      timestamp: new Date()
-    });
+      socket.emit('initial-data', {
+        endpoints,
+        statuses: enrichedStatuses,
+        recentChecks,
+        metrics,
+        timestamp: new Date()
+      });
 
-    console.log(`Initial data sent to user ${userId}`);
-  } catch (error) {
-    console.error('Error sending initial data:', error);
-    socket.emit('error', { 
-      message: 'Failed to load initial data',
-      code: 'INIT_DATA_ERROR'
-    });
+      console.log(`Initial data sent to user ${userId}`);
+    } catch (error) {
+      console.error('Error sending initial data:', error);
+      socket.emit('error', { 
+        message: 'Failed to load initial data',
+        code: 'INIT_DATA_ERROR'
+      });
+    }
   }
-}
 
   private async sendEndpointLatestData(socket: Socket, endpointId: string) {
     try {
@@ -395,68 +423,65 @@ export class WebSocketService implements IWebSocketService {
   }
 
   private async broadcastLiveStats() {
-  const usersMap = new Map<string, string[]>(); // userId -> socketIds
-  
-  this.connectedUsers.forEach((user, socketId) => {
-    if (!usersMap.has(user.userId)) {
-      usersMap.set(user.userId, []);
-    }
-    usersMap.get(user.userId)!.push(socketId);
-  });
+    const usersMap = new Map<string, string[]>(); // userId -> socketIds
+    
+    this.connectedUsers.forEach((user, socketId) => {
+      if (!usersMap.has(user.userId)) {
+        usersMap.set(user.userId, []);
+      }
+      usersMap.get(user.userId)!.push(socketId);
+    });
 
-  if (usersMap.size === 0) return;
+    if (usersMap.size === 0) return;
 
-  const broadcastPromises = Array.from(usersMap.entries()).map(async ([userId, socketIds]) => {
-    try {
-      const endpoints = await this.endpointRepository.findByUser(userId);
-      const statuses = await this.healthCheckService.getUserEndpointsStatus(userId);
-      
-      // Add isActive to statuses
-      const enrichedStatuses = statuses.map(status => ({
-        ...status,
-        isActive: endpoints.find(e => e._id.toString() === status.endpointId)?.isActive || false
-      }));
-      
-      const metrics = this.calculateMetrics(enrichedStatuses);
-      
-      const statsData = {
-        statuses: enrichedStatuses,
-        metrics,
-        timestamp: new Date()
-      };
+    const broadcastPromises = Array.from(usersMap.entries()).map(async ([userId, socketIds]) => {
+      try {
+        const endpoints = await this.endpointRepository.findByUser(userId);
+        const statuses = await this.healthCheckService.getUserEndpointsStatus(userId);
+        
+        const enrichedStatuses = statuses.map(status => ({
+          ...status,
+          isActive: endpoints.find(e => e._id.toString() === status.endpointId)?.isActive || false
+        }));
+        
+        const metrics = this.calculateMetrics(enrichedStatuses);
+        
+        const statsData = {
+          statuses: enrichedStatuses,
+          metrics,
+          timestamp: new Date()
+        };
 
-      socketIds.forEach(socketId => {
-        this.io.to(socketId).emit('live-stats', statsData);
-      });
-    } catch (error) {
-      console.error(`Error broadcasting stats for user ${userId}:`, error);
-    }
-  });
+        socketIds.forEach(socketId => {
+          this.io.to(socketId).emit('live-stats', statsData);
+        });
+      } catch (error) {
+        console.error(`Error broadcasting stats for user ${userId}:`, error);
+      }
+    });
 
-  await Promise.allSettled(broadcastPromises);
-}
-
-  
+    await Promise.allSettled(broadcastPromises);
+  }
 
   private calculateMetrics(statuses: EndpointStatus[]): LiveMetrics {
-  const activeStatuses = statuses.filter(s => s.isActive);
-  const total = activeStatuses.length;
-  const up = activeStatuses.filter(s => s.status === 'up').length;
-  const degraded = activeStatuses.filter(s => s.status === 'degraded').length;
-  const down = activeStatuses.filter(s => s.status === 'down').length;
-  
-  const avgResponse = activeStatuses.reduce((acc, s) => acc + s.lastResponseTime, 0) / total || 0;
-  const avgUptime = activeStatuses.reduce((acc, s) => acc + s.uptime, 0) / total || 100;
+    const activeStatuses = statuses.filter(s => s.isActive);
+    const total = activeStatuses.length;
+    const up = activeStatuses.filter(s => s.status === 'up').length;
+    const degraded = activeStatuses.filter(s => s.status === 'degraded').length;
+    const down = activeStatuses.filter(s => s.status === 'down').length;
+    
+    const avgResponse = activeStatuses.reduce((acc, s) => acc + s.lastResponseTime, 0) / total || 0;
+    const avgUptime = activeStatuses.reduce((acc, s) => acc + s.uptime, 0) / total || 100;
 
-  return {
-    total,
-    up,
-    degraded,
-    down,
-    avgResponse: Math.round(avgResponse),
-    avgUptime: Math.round(avgUptime * 100) / 100
-  };
-}
+    return {
+      total,
+      up,
+      degraded,
+      down,
+      avgResponse: Math.round(avgResponse),
+      avgUptime: Math.round(avgUptime * 100) / 100
+    };
+  }
 
   private findSubscribers(endpointId: string): Array<{ socketId: string; userId: string }> {
     const subscribers: Array<{ socketId: string; userId: string }> = [];
@@ -509,34 +534,10 @@ export class WebSocketService implements IWebSocketService {
         socketId,
         userId: user.userId,
         subscribedEndpoints: Array.from(user.subscribedEndpoints),
-        tokenType: user.tokenType
+        tokenType: user.tokenType,
+        connectedAt: user.connectedAt
       }))
     };
-  }
-
-  public async refreshUserTokens(userId: string): Promise<boolean> {
-    try {
-      const userSockets = this.findSocketsByUserId(userId);
-      if (userSockets.length === 0) return false;
-
-      const user = await this.endpointRepository.findById(userId);
-      if (!user) return false;
-
-      const newTokens = this.jwtService.generateTokenPair({
-        userId: user._id.toString(),
-        email: '',
-        role: 'user'
-      });
-
-      userSockets.forEach(socketId => {
-        this.io.to(socketId).emit('tokens-refreshed', newTokens);
-      });
-
-      return true;
-    } catch (error) {
-      console.error(`Error refreshing tokens for user ${userId}:`, error);
-      return false;
-    }
   }
 
   public notifyEndpointDeleted(endpointId: string, userId: string): void {
