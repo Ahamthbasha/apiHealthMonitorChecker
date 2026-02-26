@@ -32,6 +32,7 @@ export class ApiEndpointService implements IApiEndpointService {
     }
 
     const afterProtocol = data.url.split('://')[1];
+    
     if (!afterProtocol || afterProtocol.length === 0) {
       throw new AppError('Invalid URL format. Must include http:// or https://', 400);
     }

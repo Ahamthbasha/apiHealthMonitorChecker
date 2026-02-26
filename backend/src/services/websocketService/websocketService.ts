@@ -5,7 +5,7 @@ import { IApiEndpointRepository } from '../../repository/userRepo/apiEndpointRep
 import { IHealthCheck } from '../../models/healthCheckModel';
 import { IJwtService, IJwtPayload } from '../jwtService/IJwtService';
 import { HealthCheckDTO } from '../../dto/healthCheckDTO';
-import { ConnectedUser, EndpointStatus, IWebSocketService, LiveMetrics, } from './IWebSocketService';
+import { ConnectedUser, EndpointStatus, IWebSocketService, LiveMetrics } from './IWebSocketService';
 import { ThresholdAlert } from '../../dto/healthCheckServiceDTO';
 
 interface JwtPayloadWithExp extends IJwtPayload {
@@ -37,7 +37,7 @@ export class WebSocketService implements IWebSocketService {
         credentials: true,
         methods: ['GET', 'POST']
       },
-      pingTimeout: 60000,
+      pingTimeout: 60000, 
       pingInterval: 25000,
       cookie: true,
       connectTimeout: 10000
@@ -54,7 +54,6 @@ export class WebSocketService implements IWebSocketService {
       try {
         const { accessToken, refreshToken } = this.extractTokens(socket);
 
-        // Don't require accessToken - let the auth flow handle it
         if (!accessToken && !refreshToken) {
           console.log('No tokens found in handshake');
           return next(new Error('Authentication required'));
@@ -67,14 +66,8 @@ export class WebSocketService implements IWebSocketService {
         }
 
         socket.data.userId = authResult.userId;
-        socket.data.tokenType = authResult.tokenType;
-        
-        // If token is expiring soon, notify client to refresh
-        if (authResult.tokenExpiring) {
-          socket.emit('token-expiring', { message: 'Token expiring soon' });
-        }
 
-        console.log(`User ${authResult.userId} authenticated with ${authResult.tokenType} token`);
+        console.log(`User ${authResult.userId} authenticated`);
         next();
       } catch (error) {
         console.error('Authentication middleware error:', error);
@@ -87,22 +80,10 @@ export class WebSocketService implements IWebSocketService {
     let accessToken: string | null = null;
     let refreshToken: string | null = null;
 
-    if (socket.handshake.auth.token) {
-      accessToken = socket.handshake.auth.token;
-    }
-
-    if (!accessToken && socket.handshake.headers.cookie) {
+    if (socket.handshake.headers.cookie) {
       const cookies = this.parseCookies(socket.handshake.headers.cookie);
       accessToken = cookies['accessToken'] || null;
       refreshToken = cookies['refreshToken'] || null;
-      
-      if (Object.keys(cookies).length > 0) {
-        console.log('Cookies received:', Object.keys(cookies));
-      }
-    }
-
-    if (!accessToken && socket.handshake.query.token) {
-      accessToken = socket.handshake.query.token as string;
     }
 
     return { accessToken, refreshToken };
@@ -122,27 +103,18 @@ export class WebSocketService implements IWebSocketService {
   ): Promise<{
     authenticated: boolean;
     userId?: string;
-    tokenType?: 'access' | 'refresh';
-    tokenExpiring?: boolean;
     error?: string;
   }> {
     // Try access token first
     if (accessToken) {
       try {
         const decoded = await this.jwtService.verifyAccessToken(accessToken) as JwtPayloadWithExp;
-        
-        // Check if token is expiring soon (within 2 minutes)
-        const expiringSoon = this.isTokenExpiringSoon(decoded.exp);
-        
         return {
           authenticated: true,
-          userId: decoded.userId,
-          tokenType: 'access',
-          tokenExpiring: expiringSoon
+          userId: decoded.userId
         };
       } catch (accessError) {
         console.log('Access token expired, checking refresh token...');
-        // Continue to refresh token check
       }
     }
 
@@ -150,13 +122,9 @@ export class WebSocketService implements IWebSocketService {
     if (refreshToken) {
       try {
         const decoded = await this.jwtService.verifyRefreshToken(refreshToken) as JwtPayloadWithExp;
-        
-        // Refresh token is valid - client can use it to get new access token via HTTP
         return {
           authenticated: true,
-          userId: decoded.userId,
-          tokenType: 'refresh',
-          tokenExpiring: true // Signal that access token needs refresh
+          userId: decoded.userId
         };
       } catch (refreshError) {
         console.error('Refresh token invalid:', refreshError);
@@ -173,37 +141,17 @@ export class WebSocketService implements IWebSocketService {
     };
   }
 
-  private isTokenExpiringSoon(expTimestamp?: number): boolean {
-    if (!expTimestamp) return false;
-    
-    const now = Math.floor(Date.now() / 1000);
-    const timeUntilExpiry = expTimestamp - now;
-    
-    // Return true if token expires in less than 2 minutes (120 seconds)
-    return timeUntilExpiry < 120;
-  }
-
   private setupEventHandlers() {
     this.io.on('connection', (socket: Socket) => {
       const userId = socket.data.userId;
-      const tokenType = socket.data.tokenType;
       
-      console.log(`User ${userId} connected with socket ${socket.id} using ${tokenType} token`);
+      console.log(`User ${userId} connected with socket ${socket.id}`);
 
       this.connectedUsers.set(socket.id, {
         socketId: socket.id,
         userId,
         subscribedEndpoints: new Set(),
-        tokenType,
         connectedAt: new Date()
-      });
-
-      // Listen for token refresh requests from client
-      socket.on('request-token-refresh', async () => {
-        console.log(`Token refresh requested for user ${userId}`);
-        // Client will handle the actual refresh via HTTP endpoint
-        // Just acknowledge the request
-        socket.emit('token-refresh-acknowledged');
       });
 
       socket.on('subscribe-endpoint', (endpointId: string) => {
@@ -320,6 +268,7 @@ export class WebSocketService implements IWebSocketService {
   private async handleThresholdExceeded(alert: ThresholdAlert) {
     try {
       const endpoint = await this.endpointRepository.findById(alert.endpointId);
+      
       if (!endpoint) return;
 
       const usersToNotify = this.findUsersByEndpoint(alert.endpointId);
@@ -534,7 +483,6 @@ export class WebSocketService implements IWebSocketService {
         socketId,
         userId: user.userId,
         subscribedEndpoints: Array.from(user.subscribedEndpoints),
-        tokenType: user.tokenType,
         connectedAt: user.connectedAt
       }))
     };

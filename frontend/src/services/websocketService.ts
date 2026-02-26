@@ -170,7 +170,7 @@ class WebSocketService {
 
     this.connectionPromise = new Promise((resolve, reject) => {
       try {
-        console.log("🔌 Connecting to WebSocket server...", API_BASE_URL);
+        console.log("Connecting to WebSocket server...", API_BASE_URL);
 
         const wsUrl = API_BASE_URL.replace(/^http/, "ws");
 
@@ -204,7 +204,7 @@ class WebSocketService {
 
     // Connection successful
     this.socket.on("connect", () => {
-      console.log("✅ WebSocket connected with ID:", this.socket?.id);
+      console.log("WebSocket connected with ID:", this.socket?.id);
       this.reconnectAttempts = 0;
       this.connectionPromise = null;
       this.emit("connection-status", { connected: true });
@@ -219,7 +219,7 @@ class WebSocketService {
 
     // Connection error
     this.socket.on("connect_error", (error: Error) => {
-      console.error("❌ WebSocket connection error:", error.message);
+      console.error("WebSocket connection error:", error.message);
       this.reconnectAttempts++;
 
       if (this.reconnectAttempts >= this.maxReconnectAttempts) {
@@ -242,7 +242,7 @@ class WebSocketService {
         error.message === "Authentication required" ||
         error.message === "Invalid token"
       ) {
-        console.error("❌ WebSocket authentication failed");
+        console.error("WebSocket authentication failed");
         this.emit("connection-status", {
           connected: false,
           reason: "Authentication failed",
@@ -254,7 +254,7 @@ class WebSocketService {
 
     // Disconnect
     this.socket.on("disconnect", (reason: string) => {
-      console.log("🔌 WebSocket disconnected:", reason);
+      console.log("WebSocket disconnected:", reason);
       this.emit("connection-status", { connected: false, reason });
 
       if (reason === "io server disconnect") {
@@ -294,14 +294,14 @@ class WebSocketService {
 
     // Handle token refresh acknowledgment
     this.socket.on("token-refresh-acknowledged", () => {
-      console.log("✅ Token refresh acknowledged by server");
+      console.log("Token refresh acknowledged by server");
     });
 
     // Handle custom events
     this.socket.on("initial-data", (data: InitialData) => {
       try {
         console.log(
-          "📦 Received initial data with",
+          "Received initial data with",
           data.statuses?.length || 0,
           "endpoints",
         );
@@ -377,9 +377,7 @@ class WebSocketService {
     });
   }
 
-  /**
-   * Refresh token via HTTP endpoint - this will update cookies automatically
-   */
+  
   private async refreshTokenViaHttp(): Promise<boolean> {
     // Prevent multiple simultaneous refresh attempts
     if (this.refreshInProgress) {
@@ -390,7 +388,7 @@ class WebSocketService {
     this.refreshInProgress = true;
 
     try {
-      console.log("🔄 Refreshing token via HTTP...");
+      console.log("Refreshing token via HTTP...");
       
       // Call any protected endpoint - the auth middleware will refresh the token
       // and set new cookies automatically
@@ -525,7 +523,7 @@ class WebSocketService {
 
   disconnect(): void {
     if (this.socket) {
-      console.log("🔌 Disconnecting WebSocket");
+      console.log("Disconnecting WebSocket");
       this.socket.removeAllListeners();
       this.socket.disconnect();
       this.socket = null;

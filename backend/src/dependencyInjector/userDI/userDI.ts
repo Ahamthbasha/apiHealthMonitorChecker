@@ -54,17 +54,17 @@ if (hasGmailConfig) {
     pass: process.env.GMAIL_APP_PASSWORD!,
     fromName: process.env.GMAIL_FROM_NAME || 'Task Management System'
   });
-  console.log('📧 Using Gmail SMTP for emails');
+  console.log('Using Gmail SMTP for emails');
 } else {
-  console.warn('⚠️ Gmail credentials not found. Using console logging for emails.');
+  console.warn('Gmail credentials not found. Using console logging for emails.');
   emailService = {
     sendOTPEmail: async (email: string, otp: string) => {
       console.log('=================================');
-      console.log(`🔐 [DEV MODE] OTP for ${email}: ${otp}`);
+      console.log(`[DEV MODE] OTP for ${email}: ${otp}`);
       console.log('=================================');
     },
     sendWelcomeEmail: async (email: string, name: string) => {
-      console.log(`📧 [DEV MODE] Welcome email sent to ${name} (${email})`);
+      console.log(`[DEV MODE] Welcome email sent to ${name} (${email})`);
     }
   } as IEmailService;
 }

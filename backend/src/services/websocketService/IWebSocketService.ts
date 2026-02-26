@@ -11,8 +11,7 @@ export interface IWebSocketService {
       socketId: string;
       userId: string;
       subscribedEndpoints: string[];
-      tokenType?: "access" | "refresh";
-      connectedAt?:Date;
+      connectedAt?: Date;
     }>;
   };
 
@@ -23,8 +22,7 @@ export interface ConnectedUser {
   socketId: string;
   userId: string;
   subscribedEndpoints: Set<string>;
-  tokenType?: "access" | "refresh";
-  connectedAt?:Date
+  connectedAt?: Date;
 }
 
 export interface LiveMetrics {
@@ -48,9 +46,4 @@ export interface EndpointStatus {
   interval: number;
   totalChecks: number;
   isActive: boolean;
-}
-
-export interface TokenRefreshResponse {
-  accessToken: string;
-  refreshToken: string;
 }

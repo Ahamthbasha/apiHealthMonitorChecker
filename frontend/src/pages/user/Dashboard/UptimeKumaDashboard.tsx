@@ -261,7 +261,7 @@ const UptimeKumaDashboard: React.FC = () => {
     });
 
     wsService.on("endpoint-updated", ({ endpointId, check }) => {
-      // Update statuses list with new uptime calculation
+      
       setStatuses((prev) =>
         prev.map((s) => {
           if (s.endpointId !== endpointId) return s;
@@ -289,8 +289,7 @@ const UptimeKumaDashboard: React.FC = () => {
           };
         }),
       );
-
-      // Update selected endpoint and stats if this is the selected one
+      
       if (selectedEndpointRef.current?.endpointId === endpointId && selectedEndpointRef.current.isActive) {
         // Update the selected endpoint object
         setSelectedEndpoint((prev) => {
